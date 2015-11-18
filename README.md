@@ -9,5 +9,4 @@ Here's an example:
 
     for document_id in xrange(repository.document_base(),
                               repository.maximum_document()):
-
         print repository.document(document_id)
