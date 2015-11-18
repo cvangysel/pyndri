@@ -5,6 +5,8 @@ pyndri is a Python interface to the Indri search engine (http://www.lemurproject
 
 Here's an example:
 
+    import pyndri
+
     repository = pyndri.IndriRepository('/path/to/indri/index')
 
     for document_id in xrange(repository.document_base(),
