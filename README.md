@@ -1,17 +1,16 @@
 pyndri
 ======
 
-pyndri is a Python interface to the [Indri search engine](http://www.lemurproject.org/indri/). It is API-compatible with the latest Indri version (5.9, released in June 2015) and supersedes the outdated [pymur](http://findingscience.com/pymur/).
+pyndri is a Python interface to the Indri search engine (http://www.lemurproject.org/indri/).
 
 How to iterate over all documents in a repository:
 
     import pyndri
 
-    repository = pyndri.IndriRepository('/path/to/indri/index')
+    index = pyndri.Index('/path/to/indri/index')
 
-    for document_id in xrange(repository.document_base(),
-                              repository.maximum_document()):
-        print repository.document(document_id)
+    for document_id in xrange(index.document_base(), index.maximum_document()):
+        print index.document(document_id)
 
 The above will output pairs of external document identifiers and document terms:
 
@@ -25,14 +24,13 @@ How to launch a Indri query to an index and get the identifiers and scores of re
 
     import pyndri
 
-    query_environment = pyndri.QueryEnvironment('/path/to/indri/index')
-    repository = pyndri.IndriRepository('/path/to/indri/index')
+    index = pyndri.Index('/path/to/indri/index')
 
     # Queries the index with 'hello world' and returns the first 1000 results.
-    results = query_environment.run_query('hello world', 1000)
+    results = index.query('hello world', 1000)
 
     for int_document_id, score in results:
-        ext_document_id, _ = repository.document(int_document_id)
+        ext_document_id, _ = index.document(int_document_id)
         print ext_document_id, score
 
 The above will print document identifiers and language modeling scores:

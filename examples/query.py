@@ -6,13 +6,12 @@ if len(sys.argv) <= 1:
 
     sys.exit(0)
 
-query_environment = pyndri.QueryEnvironment(sys.argv[1])
-repository = pyndri.IndriRepository(sys.argv[1])
+index = pyndri.Index(sys.argv[1])
 
-results = query_environment.run_query('hello world', 1000)
+results = index.query('hello world', 10)
 
 for int_document_id, score in results:
-    ext_document_id, _ = repository.document(int_document_id)
+    ext_document_id, _ = index.document(int_document_id)
 
     print 'Document {ext_document_id} retrieved with score {score}.'.format(
         ext_document_id=ext_document_id, score=score)

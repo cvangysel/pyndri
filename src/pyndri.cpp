@@ -11,42 +11,50 @@
 
 using std::string;
 
-// IndriRepository
+// Index
 
 typedef struct {
     PyObject_HEAD
 
+    indri::api::Parameters* parameters_;
+
     indri::collection::CompressedCollection* collection_;
     indri::index::DiskIndex* index_;
-} IndriRepository;
 
-static void IndriRepository_dealloc(IndriRepository* self) {
+    indri::api::QueryEnvironment* query_env_;
+} Index;
+
+static void Index_dealloc(Index* self) {
     self->ob_type->tp_free((PyObject*) self);
 
     self->collection_->close();
     self->index_->close();
+    self->query_env_->close();
+
+    delete self->parameters_;
 
     delete self->collection_;
     delete self->index_;
+    delete self->query_env_;
 }
 
-static PyObject* IndriRepository_new(PyTypeObject* type,
-                                     PyObject* args,
-                                     PyObject* kwds) {
-    IndriRepository* self;
+static PyObject* Index_new(PyTypeObject* type, PyObject* args, PyObject* kwds) {
+    Index* self;
 
-    self = (IndriRepository*) type->tp_alloc(type, 0);
+    self = (Index*) type->tp_alloc(type, 0);
     if (self != NULL) {
+        self->parameters_ = new indri::api::Parameters();
+
         self->collection_ = new indri::collection::CompressedCollection();
         self->index_ = new indri::index::DiskIndex();
+
+        self->query_env_ = new indri::api::QueryEnvironment();
     }
 
     return (PyObject*) self;
 }
 
-static int IndriRepository_init(IndriRepository* self,
-                                PyObject* args,
-                                PyObject* kwds) {
+static int Index_init(Index* self, PyObject* args, PyObject* kwds) {
     PyObject* repository_path_object = NULL;
 
     static char* kwlist[] = {"repository_path", NULL};
@@ -58,6 +66,9 @@ static int IndriRepository_init(IndriRepository* self,
 
     const char* repository_path = PyString_AsString(repository_path_object);
 
+    // Load parameters.
+    self->parameters_->loadFile(indri::file::Path::combine(repository_path, "manifest"));
+
     const std::string collection_path =
         indri::file::Path::combine(repository_path, "collection");
 
@@ -66,26 +77,55 @@ static int IndriRepository_init(IndriRepository* self,
     } catch (const lemur::api::Exception& e) {
         PyErr_SetString(PyExc_IOError, e.what().c_str());
 
-        return NULL;
+        return -1;
+    }
+
+    // Load index.
+    std::string index_path = "index";
+
+    indri::api::Parameters container = (*self->parameters_)["indexes"];
+
+    if(container.exists("index")) {
+        indri::api::Parameters indexes = container["index"];
+
+        if (indexes.size() != 1) {
+            PyErr_SetString(PyExc_IOError, "Indri repository contain more than one index.");
+
+            return -1;
+        }
+
+        index_path = indri::file::Path::combine(
+            index_path, (std::string) indexes[static_cast<size_t>(0)]);
+    } else {
+        PyErr_SetString(PyExc_IOError, "Indri repository does not contain an index.");
+
+        return -1;
     }
 
     try {
-        self->index_->open(repository_path, "index/0");
+        self->index_->open(repository_path, index_path);
     } catch (const lemur::api::Exception& e) {
         PyErr_SetString(PyExc_IOError, e.what().c_str());
 
-        return NULL;
+        return -1;
+    }
+
+    try {
+        self->query_env_->addIndex(repository_path);
+    } catch (const lemur::api::Exception& e) {
+        PyErr_SetString(PyExc_IOError, e.what().c_str());
+
+        return -1;
     }
 
     return 0;
 }
 
-static PyMemberDef IndriRepository_members[] = {
+static PyMemberDef Index_members[] = {
     {NULL}  /* Sentinel */
 };
 
-static PyObject* IndriRepository_document(IndriRepository* self,
-                                          PyObject* args) {
+static PyObject* Index_document(Index* self, PyObject* args) {
     int int_document_id;
 
     if (!PyArg_ParseTuple(args, "i", &int_document_id)) {
@@ -121,126 +161,15 @@ static PyObject* IndriRepository_document(IndriRepository* self,
     return PyTuple_Pack(2, PyString_FromString(ext_document_id.c_str()), terms);
 }
 
-static PyObject* IndriRepository_document_base(IndriRepository* self) {
+static PyObject* Index_document_base(Index* self) {
     return PyInt_FromLong(self->index_->documentBase());
 }
 
-static PyObject* IndriRepository_maximum_document(IndriRepository* self) {
+static PyObject* Index_maximum_document(Index* self) {
     return PyInt_FromLong(self->index_->documentMaximum());
 }
 
-static PyMethodDef IndriRepository_methods[] = {
-    {"document", (PyCFunction) IndriRepository_document, METH_VARARGS,
-     "Return a document (ext_document_id, terms) pair."},
-    {"document_base", (PyCFunction) IndriRepository_document_base, METH_NOARGS,
-     "Returns the lower bound document identifier (inclusive)."},
-    {"maximum_document", (PyCFunction) IndriRepository_maximum_document, METH_NOARGS,
-     "Returns the upper bound document identifier (exclusive)."},
-    {NULL}  /* Sentinel */
-};
-
-static PyTypeObject IndriRepositoryType = {
-    PyObject_HEAD_INIT(NULL)
-    0,                         /*ob_size*/
-    "pyndri.IndriRepository",             /*tp_name*/
-    sizeof(IndriRepository),             /*tp_basicsize*/
-    0,                         /*tp_itemsize*/
-    (destructor) IndriRepository_dealloc, /*tp_dealloc*/
-    0,                         /*tp_print*/
-    0,                         /*tp_getattr*/
-    0,                         /*tp_setattr*/
-    0,                         /*tp_compare*/
-    0,                         /*tp_repr*/
-    0,                         /*tp_as_number*/
-    0,                         /*tp_as_sequence*/
-    0,                         /*tp_as_mapping*/
-    0,                         /*tp_hash */
-    0,                         /*tp_call*/
-    0,                         /*tp_str*/
-    0,                         /*tp_getattro*/
-    0,                         /*tp_setattro*/
-    0,                         /*tp_as_buffer*/
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /*tp_flags*/
-    "IndriRepository objects",           /* tp_doc */
-    0,                   /* tp_traverse */
-    0,                   /* tp_clear */
-    0,                   /* tp_richcompare */
-    0,                   /* tp_weaklistoffset */
-    0,                   /* tp_iter */
-    0,                   /* tp_iternext */
-    IndriRepository_methods,             /* tp_methods */
-    IndriRepository_members,             /* tp_members */
-    0,                         /* tp_getset */
-    0,                         /* tp_base */
-    0,                         /* tp_dict */
-    0,                         /* tp_descr_get */
-    0,                         /* tp_descr_set */
-    0,                         /* tp_dictoffset */
-    (initproc) IndriRepository_init,      /* tp_init */
-    0,                         /* tp_alloc */
-    IndriRepository_new,                 /* tp_new */
-};
-
-// QueryEnvironment
-
-typedef struct {
-    PyObject_HEAD
-
-    indri::api::QueryEnvironment* query_env_;
-} QueryEnvironment;
-
-static void QueryEnvironment_dealloc(QueryEnvironment* self) {
-    self->ob_type->tp_free((PyObject*) self);
-
-    self->query_env_->close();
-
-    delete self->query_env_;
-}
-
-static PyObject* QueryEnvironment_new(PyTypeObject* type,
-                                     PyObject* args,
-                                     PyObject* kwds) {
-    QueryEnvironment* self;
-
-    self = (QueryEnvironment*) type->tp_alloc(type, 0);
-    if (self != NULL) {
-        self->query_env_ = new indri::api::QueryEnvironment();
-    }
-
-    return (PyObject*) self;
-}
-
-static int QueryEnvironment_init(QueryEnvironment* self,
-                                 PyObject* args,
-                                 PyObject* kwds) {
-    PyObject* repository_path_object = NULL;
-
-    static char* kwlist[] = {"repository_path", NULL};
-
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "S", kwlist,
-                                     &repository_path_object)) {
-        return -1;
-    }
-
-    const char* repository_path = PyString_AsString(repository_path_object);
-
-    try {
-        self->query_env_->addIndex(repository_path);
-    } catch (const lemur::api::Exception& e) {
-        PyErr_SetString(PyExc_IOError, e.what().c_str());
-
-        return NULL;
-    }
-
-    return 0;
-}
-
-static PyMemberDef QueryEnvironment_members[] = {
-    {NULL}  /* Sentinel */
-};
-
-static PyObject* QueryEnvironment_run_query(QueryEnvironment* self,
-                                            PyObject* args) {
+static PyObject* Index_run_query(Index* self, PyObject* args) {
     char* query_str;
     long results_requested = 100;
 
@@ -266,19 +195,25 @@ static PyObject* QueryEnvironment_run_query(QueryEnvironment* self,
     return results;
 }
 
-static PyMethodDef QueryEnvironment_methods[] = {
-    {"run_query", (PyCFunction) QueryEnvironment_run_query, METH_VARARGS,
+static PyMethodDef Index_methods[] = {
+    {"document", (PyCFunction) Index_document, METH_VARARGS,
+     "Return a document (ext_document_id, terms) pair."},
+    {"document_base", (PyCFunction) Index_document_base, METH_NOARGS,
+     "Returns the lower bound document identifier (inclusive)."},
+    {"maximum_document", (PyCFunction) Index_maximum_document, METH_NOARGS,
+     "Returns the upper bound document identifier (exclusive)."},
+    {"query", (PyCFunction) Index_run_query, METH_VARARGS,
      "Queries an Indri index."},
     {NULL}  /* Sentinel */
 };
 
-static PyTypeObject QueryEnvironmentType = {
+static PyTypeObject IndexType = {
     PyObject_HEAD_INIT(NULL)
     0,                         /*ob_size*/
-    "pyndri.QueryEnvironment",             /*tp_name*/
-    sizeof(QueryEnvironment),             /*tp_basicsize*/
+    "pyndri.Index",             /*tp_name*/
+    sizeof(Index),             /*tp_basicsize*/
     0,                         /*tp_itemsize*/
-    (destructor) QueryEnvironment_dealloc, /*tp_dealloc*/
+    (destructor) Index_dealloc, /*tp_dealloc*/
     0,                         /*tp_print*/
     0,                         /*tp_getattr*/
     0,                         /*tp_setattr*/
@@ -294,24 +229,24 @@ static PyTypeObject QueryEnvironmentType = {
     0,                         /*tp_setattro*/
     0,                         /*tp_as_buffer*/
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /*tp_flags*/
-    "QueryEnvironment objects",           /* tp_doc */
+    "Index objects",           /* tp_doc */
     0,                   /* tp_traverse */
     0,                   /* tp_clear */
     0,                   /* tp_richcompare */
     0,                   /* tp_weaklistoffset */
     0,                   /* tp_iter */
     0,                   /* tp_iternext */
-    QueryEnvironment_methods,             /* tp_methods */
-    QueryEnvironment_members,             /* tp_members */
+    Index_methods,             /* tp_methods */
+    Index_members,             /* tp_members */
     0,                         /* tp_getset */
     0,                         /* tp_base */
     0,                         /* tp_dict */
     0,                         /* tp_descr_get */
     0,                         /* tp_descr_set */
     0,                         /* tp_dictoffset */
-    (initproc) QueryEnvironment_init,      /* tp_init */
+    (initproc) Index_init,      /* tp_init */
     0,                         /* tp_alloc */
-    QueryEnvironment_new,                 /* tp_new */
+    Index_new,                 /* tp_new */
 };
 
 // Module methods.
@@ -321,19 +256,12 @@ static PyMethodDef PyndriMethods[] = {
 };
 
 PyMODINIT_FUNC initpyndri(void) {
-    if (PyType_Ready(&IndriRepositoryType) < 0) {
-        return;
-    }
-
-    if (PyType_Ready(&QueryEnvironmentType) < 0) {
+    if (PyType_Ready(&IndexType) < 0) {
         return;
     }
 
     PyObject* const module = Py_InitModule("pyndri", PyndriMethods);
 
-    Py_INCREF(&IndriRepositoryType);
-    PyModule_AddObject(module, "IndriRepository", (PyObject*) &IndriRepositoryType);
-
-    Py_INCREF(&QueryEnvironmentType);
-    PyModule_AddObject(module, "QueryEnvironment", (PyObject*) &QueryEnvironmentType);
+    Py_INCREF(&IndexType);
+    PyModule_AddObject(module, "Index", (PyObject*) &IndexType);
 }
