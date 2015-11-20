@@ -1,7 +1,7 @@
 pyndri
 ======
 
-pyndri is a Python interface to the Indri search engine (http://www.lemurproject.org/indri/).
+pyndri is a Python interface to the [Indri search engine](http://www.lemurproject.org/indri/). It is API-compatible with the latest Indri version (5.9, released in June 2015) and supersedes the outdated [pymur](http://findingscience.com/pymur/).
 
 How to iterate over all documents in a repository:
 

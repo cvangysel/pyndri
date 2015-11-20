@@ -6,7 +6,7 @@ pyndri = Extension(
     libraries=['indri', 'z', 'pthread', 'm'],
     define_macros=[('P_NEEDS_GNU_CXX_NAMESPACE', '1')])
 
-setup(name='pyndry',
+setup(name='pyndri',
       version='1.0',
       description='pyndri is a Python interface to the Indri search engine',
       author='Christophe Van Gysel',
