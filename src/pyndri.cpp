@@ -198,10 +198,12 @@ static PyObject* Index_run_query(Index* self, PyObject* args) {
     return results;
 }
 
-static PyObject* Index_get_token2id(Index* self, PyObject* args) {
+static PyObject* Index_get_dictionary(Index* self, PyObject* args) {
     indri::index::VocabularyIterator* const vocabulary_it = self->index_->vocabularyIterator();
 
-    PyObject* const result = PyDict_New();
+    PyObject* const token2id = PyDict_New();
+    PyObject* const id2token = PyDict_New();
+    PyObject* const id2df = PyDict_New();
 
     vocabulary_it->startIteration();
 
@@ -211,16 +213,30 @@ static PyObject* Index_get_token2id(Index* self, PyObject* args) {
         const lemur::api::TERMID_T term_id = term_data->termID;
         const string term = term_data->termData->term;
 
-        PyDict_SetItemString(result, term.c_str(), PyInt_FromLong(term_id));
+        const unsigned int document_frequency = term_data->termData->corpus.documentCount;
+
+        PyDict_SetItemString(token2id,
+                             term.c_str(),
+                             PyInt_FromLong(term_id));
+
+        PyDict_SetItem(id2token,
+                       PyInt_FromLong(term_id),
+                       PyString_FromString(term.c_str()));
+
+        PyDict_SetItem(id2df,
+                       PyInt_FromLong(term_id),
+                       PyInt_FromLong(document_frequency));
 
         vocabulary_it->nextEntry();
     }
 
     delete vocabulary_it;
 
-    CHECK_EQ(PyDict_Size(result), self->index_->uniqueTermCount());
+    CHECK_EQ(PyDict_Size(token2id), self->index_->uniqueTermCount());
+    CHECK_EQ(PyDict_Size(id2token), self->index_->uniqueTermCount());
+    CHECK_EQ(PyDict_Size(id2df), self->index_->uniqueTermCount());
 
-    return result;
+    return PyTuple_Pack(3, token2id, id2token, id2df);
 }
 
 static PyMethodDef Index_methods[] = {
@@ -232,8 +248,8 @@ static PyMethodDef Index_methods[] = {
      "Returns the upper bound document identifier (exclusive)."},
     {"query", (PyCFunction) Index_run_query, METH_VARARGS,
      "Queries an Indri index."},
-    {"get_token2id", (PyCFunction) Index_get_token2id, METH_NOARGS,
-     "Extracts the vocabulary from the Index."},
+    {"get_dictionary", (PyCFunction) Index_get_dictionary, METH_NOARGS,
+     "Extracts the dictionary from the Index."},
     {NULL}  /* Sentinel */
 };
 
