@@ -1,6 +1,7 @@
 #include <Python.h>
 #include "structmember.h"
 
+#include <cassert>
 #include <string>
 #include <iostream>
 
@@ -10,6 +11,8 @@
 #include <indri/Path.hpp>
 
 using std::string;
+
+#define CHECK_EQ(first, second) assert(first == second)
 
 // Index
 
@@ -195,6 +198,31 @@ static PyObject* Index_run_query(Index* self, PyObject* args) {
     return results;
 }
 
+static PyObject* Index_get_token2id(Index* self, PyObject* args) {
+    indri::index::VocabularyIterator* const vocabulary_it = self->index_->vocabularyIterator();
+
+    PyObject* const result = PyDict_New();
+
+    vocabulary_it->startIteration();
+
+    while (!vocabulary_it->finished()) {
+        indri::index::DiskTermData* const term_data = vocabulary_it->currentEntry();
+
+        const lemur::api::TERMID_T term_id = term_data->termID;
+        const string term = term_data->termData->term;
+
+        PyDict_SetItemString(result, term.c_str(), PyInt_FromLong(term_id));
+
+        vocabulary_it->nextEntry();
+    }
+
+    delete vocabulary_it;
+
+    CHECK_EQ(PyDict_Size(result), self->index_->uniqueTermCount());
+
+    return result;
+}
+
 static PyMethodDef Index_methods[] = {
     {"document", (PyCFunction) Index_document, METH_VARARGS,
      "Return a document (ext_document_id, terms) pair."},
@@ -204,6 +232,8 @@ static PyMethodDef Index_methods[] = {
      "Returns the upper bound document identifier (exclusive)."},
     {"query", (PyCFunction) Index_run_query, METH_VARARGS,
      "Queries an Indri index."},
+    {"get_token2id", (PyCFunction) Index_get_token2id, METH_NOARGS,
+     "Extracts the vocabulary from the Index."},
     {NULL}  /* Sentinel */
 };
 

@@ -40,3 +40,10 @@ The above will print document identifiers and language modeling scores:
     eUK437700, -8.88184436222
     eUK107263, -8.89119022464
     ...
+
+The token to term identifier mapping can be extracted as follows:
+
+    import pyndri
+
+    index = pyndri.Index('/path/to/indri/index')
+    print index.get_token2id()
