@@ -13,6 +13,7 @@
 using std::string;
 
 #define CHECK_EQ(first, second) assert(first == second)
+#define CHECK_GT(first, second) assert(first > second)
 
 // Index
 
@@ -214,6 +215,8 @@ static PyObject* Index_get_dictionary(Index* self, PyObject* args) {
         const string term = term_data->termData->term;
 
         const unsigned int document_frequency = term_data->termData->corpus.documentCount;
+
+        CHECK_GT(document_frequency, 0);
 
         PyDict_SetItemString(token2id,
                              term.c_str(),
