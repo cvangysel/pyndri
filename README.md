@@ -46,4 +46,4 @@ The token to term identifier mapping can be extracted as follows:
     import pyndri
 
     index = pyndri.Index('/path/to/indri/index')
-    token2id, id2token, id2df = index.get_dictionary()
+    token2id, id2token, id2df, id2tf = index.get_dictionary()

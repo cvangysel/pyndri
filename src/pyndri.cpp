@@ -7,6 +7,7 @@
 
 #include <indri/CompressedCollection.hpp>
 #include <indri/DiskIndex.hpp>
+#include <indri/KrovetzStemmer.hpp>
 #include <indri/QueryEnvironment.hpp>
 #include <indri/Path.hpp>
 
@@ -205,6 +206,7 @@ static PyObject* Index_get_dictionary(Index* self, PyObject* args) {
     PyObject* const token2id = PyDict_New();
     PyObject* const id2token = PyDict_New();
     PyObject* const id2df = PyDict_New();
+    PyObject* const id2tf = PyDict_New();
 
     vocabulary_it->startIteration();
 
@@ -214,6 +216,7 @@ static PyObject* Index_get_dictionary(Index* self, PyObject* args) {
         const lemur::api::TERMID_T term_id = term_data->termID;
         const string term = term_data->termData->term;
 
+        const uint64_t term_frequency = term_data->termData->corpus.totalCount;
         const unsigned int document_frequency = term_data->termData->corpus.documentCount;
 
         CHECK_GT(document_frequency, 0);
@@ -230,6 +233,10 @@ static PyObject* Index_get_dictionary(Index* self, PyObject* args) {
                        PyInt_FromLong(term_id),
                        PyInt_FromLong(document_frequency));
 
+        PyDict_SetItem(id2tf,
+                       PyInt_FromLong(term_id),
+                       PyInt_FromLong(term_frequency));
+
         vocabulary_it->nextEntry();
     }
 
@@ -238,8 +245,9 @@ static PyObject* Index_get_dictionary(Index* self, PyObject* args) {
     CHECK_EQ(PyDict_Size(token2id), self->index_->uniqueTermCount());
     CHECK_EQ(PyDict_Size(id2token), self->index_->uniqueTermCount());
     CHECK_EQ(PyDict_Size(id2df), self->index_->uniqueTermCount());
+    CHECK_EQ(PyDict_Size(id2tf), self->index_->uniqueTermCount());
 
-    return PyTuple_Pack(3, token2id, id2token, id2df);
+    return PyTuple_Pack(4, token2id, id2token, id2df, id2tf);
 }
 
 static PyMethodDef Index_methods[] = {
@@ -300,7 +308,21 @@ static PyTypeObject IndexType = {
 
 // Module methods.
 
+static PyObject* pyndri_stem(PyObject* self, PyObject* args) {
+    char* term;
+
+    if (!PyArg_ParseTuple(args, "s", &term)) {
+        return NULL;
+    }
+
+    static indri::parse::KrovetzStemmer stemmer;
+
+    return PyString_FromString(stemmer.kstem_stemmer(term));
+}
+
 static PyMethodDef PyndriMethods[] = {
+    {"stem", (PyCFunction) pyndri_stem, METH_VARARGS,
+     "Return the Krovetz stemmed version of a term."},
     {NULL, NULL, 0, NULL}
 };
 
