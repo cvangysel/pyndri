@@ -206,7 +206,6 @@ static PyObject* Index_get_dictionary(Index* self, PyObject* args) {
     PyObject* const token2id = PyDict_New();
     PyObject* const id2token = PyDict_New();
     PyObject* const id2df = PyDict_New();
-    PyObject* const id2tf = PyDict_New();
 
     vocabulary_it->startIteration();
 
@@ -216,9 +215,7 @@ static PyObject* Index_get_dictionary(Index* self, PyObject* args) {
         const lemur::api::TERMID_T term_id = term_data->termID;
         const string term = term_data->termData->term;
 
-        const uint64_t term_frequency = term_data->termData->corpus.totalCount;
         const unsigned int document_frequency = term_data->termData->corpus.documentCount;
-
         CHECK_GT(document_frequency, 0);
 
         PyDict_SetItemString(token2id,
@@ -233,6 +230,33 @@ static PyObject* Index_get_dictionary(Index* self, PyObject* args) {
                        PyInt_FromLong(term_id),
                        PyInt_FromLong(document_frequency));
 
+        vocabulary_it->nextEntry();
+    }
+
+    delete vocabulary_it;
+
+    CHECK_EQ(PyDict_Size(token2id), self->index_->uniqueTermCount());
+    CHECK_EQ(PyDict_Size(id2token), self->index_->uniqueTermCount());
+    CHECK_EQ(PyDict_Size(id2df), self->index_->uniqueTermCount());
+
+    return PyTuple_Pack(3, token2id, id2token, id2df);
+}
+
+static PyObject* Index_get_term_frequencies(Index* self, PyObject* args) {
+    indri::index::VocabularyIterator* const vocabulary_it = self->index_->vocabularyIterator();
+
+    PyObject* const id2tf = PyDict_New();
+
+    vocabulary_it->startIteration();
+
+    while (!vocabulary_it->finished()) {
+        indri::index::DiskTermData* const term_data = vocabulary_it->currentEntry();
+
+        const lemur::api::TERMID_T term_id = term_data->termID;
+
+        const uint64_t term_frequency = term_data->termData->corpus.totalCount;
+        CHECK_GT(term_frequency, 0);
+
         PyDict_SetItem(id2tf,
                        PyInt_FromLong(term_id),
                        PyInt_FromLong(term_frequency));
@@ -242,12 +266,9 @@ static PyObject* Index_get_dictionary(Index* self, PyObject* args) {
 
     delete vocabulary_it;
 
-    CHECK_EQ(PyDict_Size(token2id), self->index_->uniqueTermCount());
-    CHECK_EQ(PyDict_Size(id2token), self->index_->uniqueTermCount());
-    CHECK_EQ(PyDict_Size(id2df), self->index_->uniqueTermCount());
     CHECK_EQ(PyDict_Size(id2tf), self->index_->uniqueTermCount());
 
-    return PyTuple_Pack(4, token2id, id2token, id2df, id2tf);
+    return id2tf;
 }
 
 static PyMethodDef Index_methods[] = {
@@ -260,7 +281,9 @@ static PyMethodDef Index_methods[] = {
     {"query", (PyCFunction) Index_run_query, METH_VARARGS,
      "Queries an Indri index."},
     {"get_dictionary", (PyCFunction) Index_get_dictionary, METH_NOARGS,
-     "Extracts the dictionary from the Index."},
+     "Extracts the dictionary from the index."},
+    {"get_term_frequencies", (PyCFunction) Index_get_term_frequencies, METH_NOARGS,
+     "Extracts the term frequencies from the index."},
     {NULL}  /* Sentinel */
 };
 

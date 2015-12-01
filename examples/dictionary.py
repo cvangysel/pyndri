@@ -8,5 +8,9 @@ if len(sys.argv) <= 1:
 
 index = pyndri.Index(sys.argv[1])
 
-token2id, id2token, id2df, id2tf = index.get_dictionary()
+token2id, id2token, id2df = index.get_dictionary()
 print token2id
+
+id2tf = index.get_term_frequencies()
+
+print len(token2id), len(id2tf)
