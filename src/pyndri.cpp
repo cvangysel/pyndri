@@ -174,6 +174,10 @@ static PyObject* Index_maximum_document(Index* self) {
     return PyInt_FromLong(self->index_->documentMaximum());
 }
 
+static PyObject* Index_document_count(Index* self) {
+    return PyInt_FromLong(self->index_->documentCount());
+}
+
 static PyObject* Index_run_query(Index* self, PyObject* args) {
     char* query_str;
     long results_requested = 100;
@@ -278,6 +282,8 @@ static PyMethodDef Index_methods[] = {
      "Returns the lower bound document identifier (inclusive)."},
     {"maximum_document", (PyCFunction) Index_maximum_document, METH_NOARGS,
      "Returns the upper bound document identifier (exclusive)."},
+    {"document_count", (PyCFunction) Index_document_count, METH_NOARGS,
+     "Returns the number of documents in the index."},
     {"query", (PyCFunction) Index_run_query, METH_VARARGS,
      "Queries an Indri index."},
     {"get_dictionary", (PyCFunction) Index_get_dictionary, METH_NOARGS,

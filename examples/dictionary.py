@@ -14,3 +14,5 @@ print token2id
 id2tf = index.get_term_frequencies()
 
 print len(token2id), len(id2tf)
+
+print 'Index contains %d documents.' % index.document_count()
