@@ -1,3 +1,4 @@
+import operator
 import pyndri
 import sys
 
@@ -18,7 +19,9 @@ for int_document_id, score in results:
 
 results = index.query(
     'hello world',
-    document_set=index.document_ids(['eUK306804', 'eUK700967']),
+    document_set=map(
+        operator.itemgetter(1),
+        index.document_ids(['eUK306804', 'eUK700967'])),
     results_requested=-5)
 
 for int_document_id, score in results:

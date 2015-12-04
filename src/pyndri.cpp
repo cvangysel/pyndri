@@ -170,7 +170,15 @@ static PyObject* Index_get_document_ids(Index* self, PyObject* args) {
     for (std::vector<lemur::api::DOCID_T>::iterator int_doc_ids_it = int_doc_ids.begin();
          int_doc_ids_it != int_doc_ids.end();
          ++int_doc_ids_it, ++pos) {
-        PyTuple_SetItem(int_doc_ids_tuple, pos, PyInt_FromLong(*int_doc_ids_it));
+        const lemur::api::DOCID_T int_document_id = *int_doc_ids_it;
+
+        const std::string ext_document_id =
+            self->collection_->retrieveMetadatum(int_document_id, "docno");
+
+        PyTuple_SetItem(int_doc_ids_tuple, pos,
+                        PyTuple_Pack(2,
+                            PyString_FromString(ext_document_id.c_str()),
+                            PyInt_FromLong(int_document_id)));
     }
 
     return int_doc_ids_tuple;
