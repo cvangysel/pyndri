@@ -138,6 +138,10 @@ static PyObject* Index_get_document_ids(Index* self, PyObject* args) {
         return NULL;
     }
 
+    if (external_doc_ids == NULL) {
+        return NULL;
+    }
+
     PyObject* const iterator = PyObject_GetIter(external_doc_ids);
     PyObject *item;
 
@@ -159,12 +163,11 @@ static PyObject* Index_get_document_ids(Index* self, PyObject* args) {
     }
 
     Py_DECREF(iterator);
-    Py_XDECREF(external_doc_ids);
 
     std::vector<lemur::api::DOCID_T> int_doc_ids =
         self->query_env_->documentIDsFromMetadata("docno", ext_document_ids);
 
-    PyObject* const int_doc_ids_tuple = PyTuple_New(int_doc_ids.size());
+    PyObject* const doc_ids_tuple = PyTuple_New(int_doc_ids.size());
 
     Py_ssize_t pos = 0;
     for (std::vector<lemur::api::DOCID_T>::iterator int_doc_ids_it = int_doc_ids.begin();
@@ -175,13 +178,14 @@ static PyObject* Index_get_document_ids(Index* self, PyObject* args) {
         const std::string ext_document_id =
             self->collection_->retrieveMetadatum(int_document_id, "docno");
 
-        PyTuple_SetItem(int_doc_ids_tuple, pos,
+        PyTuple_SetItem(doc_ids_tuple,
+                        pos,
                         PyTuple_Pack(2,
                             PyString_FromString(ext_document_id.c_str()),
                             PyInt_FromLong(int_document_id)));
     }
 
-    return int_doc_ids_tuple;
+    return doc_ids_tuple;
 }
 
 static PyObject* Index_document(Index* self, PyObject* args) {
