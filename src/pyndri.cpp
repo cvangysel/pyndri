@@ -13,6 +13,7 @@
 
 using std::string;
 
+#define CHECK(condition) assert(condition)
 #define CHECK_EQ(first, second) assert(first == second)
 #define CHECK_GT(first, second) assert(first > second)
 
@@ -130,6 +131,51 @@ static PyMemberDef Index_members[] = {
     {NULL}  /* Sentinel */
 };
 
+static PyObject* Index_get_document_ids(Index* self, PyObject* args) {
+    PyObject* external_doc_ids = NULL;
+
+    if (!PyArg_ParseTuple(args, "O", &external_doc_ids)) {
+        return NULL;
+    }
+
+    PyObject* const iterator = PyObject_GetIter(external_doc_ids);
+    PyObject *item;
+
+    if (iterator == NULL) {
+        PyErr_SetString(
+            PyExc_TypeError,
+            "Passed object is not iterable.");
+
+        return NULL;
+    }
+
+    std::vector<std::string> ext_document_ids;
+
+    while (item = PyIter_Next(iterator)) {
+        char* const ext_document_id = PyString_AsString(item);
+        ext_document_ids.push_back(ext_document_id);
+
+        Py_DECREF(item);
+    }
+
+    Py_DECREF(iterator);
+    Py_XDECREF(external_doc_ids);
+
+    std::vector<lemur::api::DOCID_T> int_doc_ids =
+        self->query_env_->documentIDsFromMetadata("docno", ext_document_ids);
+
+    PyObject* const int_doc_ids_tuple = PyTuple_New(int_doc_ids.size());
+
+    Py_ssize_t pos = 0;
+    for (std::vector<lemur::api::DOCID_T>::iterator int_doc_ids_it = int_doc_ids.begin();
+         int_doc_ids_it != int_doc_ids.end();
+         ++int_doc_ids_it, ++pos) {
+        PyTuple_SetItem(int_doc_ids_tuple, pos, PyInt_FromLong(*int_doc_ids_it));
+    }
+
+    return int_doc_ids_tuple;
+}
+
 static PyObject* Index_document(Index* self, PyObject* args) {
     int int_document_id;
 
@@ -178,16 +224,64 @@ static PyObject* Index_document_count(Index* self) {
     return PyInt_FromLong(self->index_->documentCount());
 }
 
-static PyObject* Index_run_query(Index* self, PyObject* args) {
+static PyObject* Index_run_query(Index* self, PyObject* args, PyObject* kwds) {
     char* query_str;
-    long results_requested = 100;
+    PyObject* document_set = NULL;
+    long results_requested = 0;
 
-    if (!PyArg_ParseTuple(args, "s|i", &query_str, &results_requested)) {
+    static char* kwlist[] = {"query_str", "document_set", "results_requested", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|Ol", kwlist,
+                                     &query_str, &document_set, &results_requested)) {
         return NULL;
     }
 
-    const std::vector<indri::api::ScoredExtentResult> query_results =
-        self->query_env_->runQuery(query_str, results_requested);
+    if (results_requested <= 0) {
+        if (document_set != NULL) {
+            results_requested = PySequence_Size(document_set);
+        } else {
+            results_requested = 100;
+        }
+    }
+
+    CHECK_GT(results_requested, 0);
+
+    std::vector<lemur::api::DOCID_T> document_ids;
+    if (document_set != NULL) {
+        PyObject* const iterator = PyObject_GetIter(document_set);
+        PyObject *item;
+
+        if (iterator == NULL) {
+            PyErr_SetString(
+                PyExc_TypeError,
+                "Passed object for document_set not iterable.");
+
+            return NULL;
+        }
+
+        while (item = PyIter_Next(iterator)) {
+            CHECK(PyInt_CheckExact(item));
+
+            const long int_doc_id = PyInt_AsLong(item);
+            if (int_doc_id < 0) {
+                continue;
+            }
+
+            document_ids.push_back(int_doc_id);
+
+            Py_DECREF(item);
+        }
+
+        Py_DECREF(iterator);
+    }
+
+    std::vector<indri::api::ScoredExtentResult> query_results;
+
+    if (document_ids.empty()) {
+        query_results = self->query_env_->runQuery(query_str, results_requested);
+    } else{
+        query_results = self->query_env_->runQuery(query_str, document_ids, results_requested);
+    }
 
     PyObject* results = PyTuple_New(query_results.size());
 
@@ -195,10 +289,12 @@ static PyObject* Index_run_query(Index* self, PyObject* args) {
 
     Py_ssize_t pos = 0;
     for (; it != query_results.end(); ++it, ++pos) {
-      PyTuple_SetItem(
-          results,
-          pos,
-          PyTuple_Pack(2, PyInt_FromLong(it->document), PyFloat_FromDouble(it->score)));
+        PyTuple_SetItem(
+            results,
+            pos,
+            PyTuple_Pack(2,
+                         PyInt_FromLong(it->document),
+                         PyFloat_FromDouble(it->score)));
     }
 
     return results;
@@ -276,6 +372,8 @@ static PyObject* Index_get_term_frequencies(Index* self, PyObject* args) {
 }
 
 static PyMethodDef Index_methods[] = {
+    {"document_ids", (PyCFunction) Index_get_document_ids, METH_VARARGS,
+     "Returns the internal DOC_IDs given the external identifiers."},
     {"document", (PyCFunction) Index_document, METH_VARARGS,
      "Return a document (ext_document_id, terms) pair."},
     {"document_base", (PyCFunction) Index_document_base, METH_NOARGS,
@@ -284,7 +382,7 @@ static PyMethodDef Index_methods[] = {
      "Returns the upper bound document identifier (exclusive)."},
     {"document_count", (PyCFunction) Index_document_count, METH_NOARGS,
      "Returns the number of documents in the index."},
-    {"query", (PyCFunction) Index_run_query, METH_VARARGS,
+    {"query", (PyCFunction) Index_run_query, METH_VARARGS | METH_KEYWORDS,
      "Queries an Indri index."},
     {"get_dictionary", (PyCFunction) Index_get_dictionary, METH_NOARGS,
      "Extracts the dictionary from the index."},
