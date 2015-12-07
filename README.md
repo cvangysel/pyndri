@@ -27,7 +27,7 @@ How to launch a Indri query to an index and get the identifiers and scores of re
     index = pyndri.Index('/path/to/indri/index')
 
     # Queries the index with 'hello world' and returns the first 1000 results.
-    results = index.query('hello world', 1000)
+    results = index.query('hello world', results_requested=1000)
 
     for int_document_id, score in results:
         ext_document_id, _ = index.document(int_document_id)
