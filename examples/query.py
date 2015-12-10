@@ -17,12 +17,19 @@ for int_document_id, score in results:
     print 'Document {ext_document_id} retrieved with score {score}.'.format(
         ext_document_id=ext_document_id, score=score)
 
+print
+
 results = index.query(
     'hello world',
     document_set=map(
         operator.itemgetter(1),
         index.document_ids(['eUK306804', 'eUK700967'])),
-    results_requested=-5)
+    results_requested=-5,
+    include_snippets=True)
 
-for int_document_id, score in results:
-    print int_document_id, score
+for int_document_id, score, snippet in results:
+    print 'Document {ext_document_id} ("{snippet}"") ' \
+          'retrieved with score {score}.'.format(
+              ext_document_id=ext_document_id,
+              snippet=snippet.replace('\n', ' '),
+              score=score)

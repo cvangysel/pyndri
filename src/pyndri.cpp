@@ -240,11 +240,19 @@ static PyObject* Index_run_query(Index* self, PyObject* args, PyObject* kwds) {
     char* query_str;
     PyObject* document_set = NULL;
     long results_requested = 0;
+    bool include_snippets = false;
 
-    static char* kwlist[] = {"query_str", "document_set", "results_requested", NULL};
+    static char* kwlist[] = {"query_str",
+                             "document_set",
+                             "results_requested",
+                             "include_snippets",
+                             NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|Ol", kwlist,
-                                     &query_str, &document_set, &results_requested)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|Olb", kwlist,
+                                     &query_str,
+                                     &document_set,
+                                     &results_requested,
+                                     &include_snippets)) {
         return NULL;
     }
 
@@ -258,7 +266,14 @@ static PyObject* Index_run_query(Index* self, PyObject* args, PyObject* kwds) {
 
     CHECK_GT(results_requested, 0);
 
-    std::vector<lemur::api::DOCID_T> document_ids;
+    // Construct request object.
+    indri::api::QueryRequest query_request;
+
+    query_request.query = query_str;
+    query_request.resultsRequested = results_requested;
+
+    query_request.docSet = std::vector<lemur::api::DOCID_T>();
+
     if (document_set != NULL) {
         PyObject* const iterator = PyObject_GetIter(document_set);
         PyObject *item;
@@ -274,12 +289,12 @@ static PyObject* Index_run_query(Index* self, PyObject* args, PyObject* kwds) {
         while (item = PyIter_Next(iterator)) {
             CHECK(PyInt_CheckExact(item));
 
-            const long int_doc_id = PyInt_AsLong(item);
+            const lemur::api::DOCID_T int_doc_id = PyInt_AsLong(item);
             if (int_doc_id < 0) {
                 continue;
             }
 
-            document_ids.push_back(int_doc_id);
+            query_request.docSet.push_back(int_doc_id);
 
             Py_DECREF(item);
         }
@@ -287,26 +302,26 @@ static PyObject* Index_run_query(Index* self, PyObject* args, PyObject* kwds) {
         Py_DECREF(iterator);
     }
 
-    std::vector<indri::api::ScoredExtentResult> query_results;
+    const indri::api::QueryResults query_results =
+        self->query_env_->runQuery(query_request);
 
-    if (document_ids.empty()) {
-        query_results = self->query_env_->runQuery(query_str, results_requested);
-    } else{
-        query_results = self->query_env_->runQuery(query_str, document_ids, results_requested);
-    }
+    PyObject* results = PyTuple_New(query_results.results.size());
 
-    PyObject* results = PyTuple_New(query_results.size());
-
-    std::vector<indri::api::ScoredExtentResult>::const_iterator it = query_results.begin();
+    std::vector<indri::api::QueryResult>::const_iterator it =
+        query_results.results.begin();
 
     Py_ssize_t pos = 0;
-    for (; it != query_results.end(); ++it, ++pos) {
-        PyTuple_SetItem(
-            results,
-            pos,
-            PyTuple_Pack(2,
-                         PyInt_FromLong(it->document),
-                         PyFloat_FromDouble(it->score)));
+    for (; it != query_results.results.end(); ++it, ++pos) {
+        PyObject* const result = PyTuple_New(include_snippets ? 3 : 2);
+
+        PyTuple_SetItem(result, 0, PyInt_FromLong(it->docid));
+        PyTuple_SetItem(result, 1, PyFloat_FromDouble(it->score));
+
+        if (include_snippets) {
+            PyTuple_SetItem(result, 2, PyString_FromString(it->snippet.c_str()));
+        }
+
+       PyTuple_SetItem(results, pos, result);
     }
 
     return results;
