@@ -10,6 +10,7 @@
 #include <indri/KrovetzStemmer.hpp>
 #include <indri/QueryEnvironment.hpp>
 #include <indri/Path.hpp>
+#include "indri/SnippetBuilder.hpp"
 
 using std::string;
 
@@ -266,13 +267,7 @@ static PyObject* Index_run_query(Index* self, PyObject* args, PyObject* kwds) {
 
     CHECK_GT(results_requested, 0);
 
-    // Construct request object.
-    indri::api::QueryRequest query_request;
-
-    query_request.query = query_str;
-    query_request.resultsRequested = results_requested;
-
-    query_request.docSet = std::vector<lemur::api::DOCID_T>();
+    std::vector<lemur::api::DOCID_T> document_ids;
 
     if (document_set != NULL) {
         PyObject* const iterator = PyObject_GetIter(document_set);
@@ -294,7 +289,7 @@ static PyObject* Index_run_query(Index* self, PyObject* args, PyObject* kwds) {
                 continue;
             }
 
-            query_request.docSet.push_back(int_doc_id);
+            document_ids.push_back(int_doc_id);
 
             Py_DECREF(item);
         }
@@ -302,23 +297,67 @@ static PyObject* Index_run_query(Index* self, PyObject* args, PyObject* kwds) {
         Py_DECREF(iterator);
     }
 
-    const indri::api::QueryResults query_results =
-        self->query_env_->runQuery(query_request);
+    indri::api::QueryAnnotation* query_annotation;
 
-    PyObject* results = PyTuple_New(query_results.results.size());
+    if (document_ids.empty()) {
+        query_annotation = self->query_env_->runAnnotatedQuery(
+            query_str, results_requested);
+    } else{
+        query_annotation = self->query_env_->runAnnotatedQuery(
+            query_str, document_ids, results_requested);
+    }
 
-    std::vector<indri::api::QueryResult>::const_iterator it =
-        query_results.results.begin();
+    std::vector<indri::api::ScoredExtentResult> query_results =
+        query_annotation->getResults();
+
+    PyObject* results = PyTuple_New(query_results.size());
+
+    std::vector<indri::api::ScoredExtentResult>::const_iterator it = query_results.begin();
+
+    std::vector<string> snippets;
+
+    if (include_snippets) {
+        indri::api::SnippetBuilder builder(false /* html */);
+
+        std::vector<lemur::api::DOCID_T> documentIDs(query_results.size(), 0);
+
+        for (size_t i = 0; i < query_results.size(); ++i) {
+            documentIDs[i] = query_results[i].document;
+        }
+
+        try {
+            const std::vector<indri::api::ParsedDocument*> documents =
+                self->query_env_->documents(documentIDs);
+
+            for (size_t i = 0; i < query_results.size(); ++i) {
+                snippets.push_back(
+                    builder.build(documentIDs[i], documents[i], query_annotation));
+
+                delete documents[i];
+            }
+        } catch (const lemur::api::Exception& e) {}
+    }
+
+    delete query_annotation;
+
+    if (include_snippets && snippets.empty()) {
+        PyErr_SetString(PyExc_IOError,
+                        "Unable to retrieve snippets. "
+                        "Make sure storeDocs is enabled "
+                        "in your Indri configuration.");
+
+        return NULL;
+    }
 
     Py_ssize_t pos = 0;
-    for (; it != query_results.results.end(); ++it, ++pos) {
+    for (; it != query_results.end(); ++it, ++pos) {
         PyObject* const result = PyTuple_New(include_snippets ? 3 : 2);
 
-        PyTuple_SetItem(result, 0, PyInt_FromLong(it->docid));
+        PyTuple_SetItem(result, 0, PyInt_FromLong(it->document));
         PyTuple_SetItem(result, 1, PyFloat_FromDouble(it->score));
 
         if (include_snippets) {
-            PyTuple_SetItem(result, 2, PyString_FromString(it->snippet.c_str()));
+            PyTuple_SetItem(result, 2, PyString_FromString(snippets[pos].c_str()));
         }
 
        PyTuple_SetItem(results, pos, result);
