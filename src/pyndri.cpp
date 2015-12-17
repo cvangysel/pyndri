@@ -299,12 +299,18 @@ static PyObject* Index_run_query(Index* self, PyObject* args, PyObject* kwds) {
 
     indri::api::QueryAnnotation* query_annotation;
 
-    if (document_ids.empty()) {
-        query_annotation = self->query_env_->runAnnotatedQuery(
-            query_str, results_requested);
-    } else{
-        query_annotation = self->query_env_->runAnnotatedQuery(
-            query_str, document_ids, results_requested);
+    try {
+        if (document_ids.empty()) {
+            query_annotation = self->query_env_->runAnnotatedQuery(
+                query_str, results_requested);
+        } else{
+            query_annotation = self->query_env_->runAnnotatedQuery(
+                query_str, document_ids, results_requested);
+        }
+    } catch (const lemur::api::Exception& e) {
+        PyErr_SetString(PyExc_IOError, e.what().c_str());
+
+        return NULL;
     }
 
     std::vector<indri::api::ScoredExtentResult> query_results =
