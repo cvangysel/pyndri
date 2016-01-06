@@ -165,8 +165,15 @@ static PyObject* Index_get_document_ids(Index* self, PyObject* args) {
 
     Py_DECREF(iterator);
 
-    std::vector<lemur::api::DOCID_T> int_doc_ids =
-        self->query_env_->documentIDsFromMetadata("docno", ext_document_ids);
+    std::vector<lemur::api::DOCID_T> int_doc_ids;
+
+    try {
+        int_doc_ids = self->query_env_->documentIDsFromMetadata("docno", ext_document_ids);
+    } catch (const lemur::api::Exception& e) {
+        PyErr_SetString(PyExc_IOError, e.what().c_str());
+
+        return NULL;
+    }
 
     PyObject* const doc_ids_tuple = PyTuple_New(int_doc_ids.size());
 
@@ -205,10 +212,18 @@ static PyObject* Index_document(Index* self, PyObject* args) {
         return NULL;
     }
 
-    const string ext_document_id = self->collection_->retrieveMetadatum(
-        int_document_id, "docno");
-    const indri::index::TermList* const term_list = self->index_->termList(
-        int_document_id);
+    string ext_document_id;
+    const indri::index::TermList* term_list;
+
+    try {
+        ext_document_id = self->collection_->retrieveMetadatum(
+            int_document_id, "docno");
+        term_list = self->index_->termList(int_document_id);
+    } catch (const lemur::api::Exception& e) {
+        PyErr_SetString(PyExc_IOError, e.what().c_str());
+
+        return NULL;
+    }
 
     PyObject* terms = PyTuple_New(term_list->terms().size());
 
