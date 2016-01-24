@@ -151,13 +151,18 @@ static PyObject* Index_get_document_ids(Index* self, PyObject* args) {
             PyExc_TypeError,
             "Passed object is not iterable.");
 
+        Py_DECREF(iterator);
+
         return NULL;
     }
 
     std::vector<std::string> ext_document_ids;
 
     while (item = PyIter_Next(iterator)) {
+        // Get a pointer to the internal string of the PyObject.
         char* const ext_document_id = PyString_AsString(item);
+
+        // Create a copy of the string.
         ext_document_ids.push_back(ext_document_id);
 
         Py_DECREF(item);
@@ -183,8 +188,17 @@ static PyObject* Index_get_document_ids(Index* self, PyObject* args) {
          ++int_doc_ids_it, ++pos) {
         const lemur::api::DOCID_T int_document_id = *int_doc_ids_it;
 
-        const std::string ext_document_id =
-            self->collection_->retrieveMetadatum(int_document_id, "docno");
+        std::string ext_document_id;
+
+        try {
+            ext_document_id = self->collection_->retrieveMetadatum(int_document_id, "docno");
+        } catch (const lemur::api::Exception& e) {
+            PyErr_SetString(PyExc_IOError, e.what().c_str());
+
+            Py_DECREF(doc_ids_tuple);
+
+            return NULL;
+        }
 
         PyTuple_SetItem(doc_ids_tuple,
                         pos,
@@ -331,8 +345,6 @@ static PyObject* Index_run_query(Index* self, PyObject* args, PyObject* kwds) {
     std::vector<indri::api::ScoredExtentResult> query_results =
         query_annotation->getResults();
 
-    PyObject* results = PyTuple_New(query_results.size());
-
     std::vector<indri::api::ScoredExtentResult>::const_iterator it = query_results.begin();
 
     std::vector<string> snippets;
@@ -369,6 +381,8 @@ static PyObject* Index_run_query(Index* self, PyObject* args, PyObject* kwds) {
 
         return NULL;
     }
+
+    PyObject* results = PyTuple_New(query_results.size());
 
     Py_ssize_t pos = 0;
     for (; it != query_results.end(); ++it, ++pos) {
