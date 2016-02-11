@@ -227,7 +227,7 @@ static PyObject* Index_document(Index* self, PyObject* args) {
     }
 
     string ext_document_id;
-    const indri::index::TermList* term_list;
+    const indri::index::TermList* term_list = 0;
 
     try {
         ext_document_id = self->collection_->retrieveMetadatum(
@@ -236,17 +236,21 @@ static PyObject* Index_document(Index* self, PyObject* args) {
     } catch (const lemur::api::Exception& e) {
         PyErr_SetString(PyExc_IOError, e.what().c_str());
 
+        if (term_list != 0) {
+            delete term_list;
+        }
+
         return NULL;
     }
 
     PyObject* terms = PyTuple_New(term_list->terms().size());
 
     indri::utility::greedy_vector<lemur::api::TERMID_T>::const_iterator term_it =
-      term_list->terms().begin();
+        term_list->terms().begin();
 
     Py_ssize_t pos = 0;
     for (; term_it != term_list->terms().end(); ++term_it, ++pos) {
-      PyTuple_SetItem(terms, pos, PyInt_FromLong(*term_it));
+        PyTuple_SetItem(terms, pos, PyInt_FromLong(*term_it));
     }
 
     delete term_list;
@@ -264,6 +268,24 @@ static PyObject* Index_maximum_document(Index* self) {
 
 static PyObject* Index_document_count(Index* self) {
     return PyInt_FromLong(self->index_->documentCount());
+}
+
+static PyObject* Index_total_terms(Index* self) {
+    return PyInt_FromLong(self->index_->termCount());
+}
+
+static PyObject* Index_unique_terms(Index* self) {
+    return PyInt_FromLong(self->index_->uniqueTermCount());
+}
+
+static PyObject* Index_document_length(Index* self, PyObject* args) {
+    int int_document_id;
+
+    if (!PyArg_ParseTuple(args, "i", &int_document_id)) {
+        return NULL;
+    }
+
+    return PyInt_FromLong(self->index_->documentLength(int_document_id));
 }
 
 static PyObject* Index_run_query(Index* self, PyObject* args, PyObject* kwds) {
@@ -306,6 +328,8 @@ static PyObject* Index_run_query(Index* self, PyObject* args, PyObject* kwds) {
             PyErr_SetString(
                 PyExc_TypeError,
                 "Passed object for document_set not iterable.");
+
+            Py_DECREF(iterator);
 
             return NULL;
         }
@@ -481,10 +505,20 @@ static PyMethodDef Index_methods[] = {
      "Returns the lower bound document identifier (inclusive)."},
     {"maximum_document", (PyCFunction) Index_maximum_document, METH_NOARGS,
      "Returns the upper bound document identifier (exclusive)."},
+
     {"document_count", (PyCFunction) Index_document_count, METH_NOARGS,
      "Returns the number of documents in the index."},
+    {"document_length", (PyCFunction) Index_document_length, METH_VARARGS,
+     "Returns the length of a document."},
+
+    {"total_terms", (PyCFunction) Index_total_terms, METH_NOARGS,
+     "Returns the number of total terms in the index."},
+    {"unique_terms", (PyCFunction) Index_unique_terms, METH_NOARGS,
+     "Returns the number of unique terms in the index."},
+
     {"query", (PyCFunction) Index_run_query, METH_VARARGS | METH_KEYWORDS,
      "Queries an Indri index."},
+
     {"get_dictionary", (PyCFunction) Index_get_dictionary, METH_NOARGS,
      "Extracts the dictionary from the index."},
     {"get_term_frequencies", (PyCFunction) Index_get_term_frequencies, METH_NOARGS,
