@@ -50,12 +50,12 @@ static PyObject* Index_new(PyTypeObject* type, PyObject* args, PyObject* kwds) {
 
     self = (Index*) type->tp_alloc(type, 0);
     if (self != NULL) {
-        self->parameters_ = new indri::api::Parameters();
+        self->parameters_ = new indri::api::Parameters;
 
-        self->collection_ = new indri::collection::CompressedCollection();
-        self->index_ = new indri::index::DiskIndex();
+        self->collection_ = new indri::collection::CompressedCollection;
+        self->index_ = new indri::index::DiskIndex;
 
-        self->query_env_ = new indri::api::QueryEnvironment();
+        self->query_env_ = new indri::api::QueryEnvironment;
     }
 
     return (PyObject*) self;
