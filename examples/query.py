@@ -28,6 +28,8 @@ results = index.query(
     include_snippets=True)
 
 for int_document_id, score, snippet in results:
+    ext_document_id, _ = index.document(int_document_id)
+
     print 'Document {ext_document_id} ("{snippet}") ' \
           'retrieved with score {score}.'.format(
               ext_document_id=ext_document_id,
