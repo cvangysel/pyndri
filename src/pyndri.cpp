@@ -278,6 +278,16 @@ static PyObject* Index_unique_terms(Index* self) {
     return PyInt_FromLong(self->index_->uniqueTermCount());
 }
 
+static PyObject* Index_term_count(Index* self, PyObject* args) {
+    char* term_object;
+
+    if (!PyArg_ParseTuple(args, "s", &term_object)) {
+        return NULL;
+    }
+
+    return PyInt_FromLong(self->index_->termCount(term_object));
+}
+
 static PyObject* Index_document_length(Index* self, PyObject* args) {
     int int_document_id;
 
@@ -515,6 +525,9 @@ static PyMethodDef Index_methods[] = {
      "Returns the number of total terms in the index."},
     {"unique_terms", (PyCFunction) Index_unique_terms, METH_NOARGS,
      "Returns the number of unique terms in the index."},
+
+    {"term_count", (PyCFunction) Index_term_count, METH_VARARGS,
+     "Return the term frequency for a term."},
 
     {"query", (PyCFunction) Index_run_query, METH_VARARGS | METH_KEYWORDS,
      "Queries an Indri index."},
