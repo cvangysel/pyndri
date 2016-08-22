@@ -1,7 +1,7 @@
 from distutils.core import setup, Extension
 
-pyndri = Extension(
-    'pyndri',
+pyndri_ext = Extension(
+    'pyndri_ext',
     sources=['src/pyndri.cpp'],
     libraries=['indri', 'z', 'pthread', 'm'],
     define_macros=[('P_NEEDS_GNU_CXX_NAMESPACE', '1')])
@@ -12,4 +12,6 @@ setup(name='pyndri',
       author='Christophe Van Gysel',
       author_email='cvangysel@uva.nl',
       url='http://ilps.science.uva.nl',
-      ext_modules=[pyndri])
+      ext_modules=[pyndri_ext],
+      packages=['pyndri'],
+      package_dir={'pyndri': 'py'})

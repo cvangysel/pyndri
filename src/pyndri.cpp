@@ -601,12 +601,12 @@ static PyMethodDef PyndriMethods[] = {
     {NULL, NULL, 0, NULL}
 };
 
-PyMODINIT_FUNC initpyndri(void) {
+PyMODINIT_FUNC initpyndri_ext(void) {
     if (PyType_Ready(&IndexType) < 0) {
         return;
     }
 
-    PyObject* const module = Py_InitModule("pyndri", PyndriMethods);
+    PyObject* const module = Py_InitModule("pyndri_ext", PyndriMethods);
 
     Py_INCREF(&IndexType);
     PyModule_AddObject(module, "Index", (PyObject*) &IndexType);
