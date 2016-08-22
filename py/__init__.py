@@ -1,4 +1,4 @@
-from dictionary import *
+from pyndri.dictionary import *
 from pyndri_ext import *
 
 __all__ = [

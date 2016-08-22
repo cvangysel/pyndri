@@ -3,6 +3,16 @@ pyndri
 
 pyndri is a Python interface to the Indri search engine (http://www.lemurproject.org/indri/).
 
+Requirements
+------------
+
+During development, we use Python 3.5. Some of the [examples](examples) require numpy.
+
+**NOTE**: Python2 support has ended; if you want to continue using it, please check out the  `python2` tag.
+
+Examples
+--------
+
 How to iterate over all documents in a repository:
 
     import pyndri
@@ -49,3 +59,8 @@ The token to term identifier mapping can be extracted as follows:
     token2id, id2token, id2df = index.get_dictionary()
 
     id2tf = index.get_term_frequencies()
+
+License
+-------
+
+Pyndri is licensed under the [MIT license](LICENSE). Please note that [Indri](http://www.lemurproject.org/indri.php) is licensed separately. If you modify Pyndri in any way, please link back to this repository.

@@ -32,8 +32,6 @@ typedef struct {
 } Index;
 
 static void Index_dealloc(Index* self) {
-    self->ob_type->tp_free((PyObject*) self);
-
     self->collection_->close();
     self->index_->close();
     self->query_env_->close();
@@ -62,16 +60,14 @@ static PyObject* Index_new(PyTypeObject* type, PyObject* args, PyObject* kwds) {
 }
 
 static int Index_init(Index* self, PyObject* args, PyObject* kwds) {
-    PyObject* repository_path_object = NULL;
+    char* repository_path = NULL;
 
     static char* kwlist[] = {"repository_path", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "S", kwlist,
-                                     &repository_path_object)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s", kwlist,
+                                     &repository_path)) {
         return -1;
     }
-
-    const char* repository_path = PyString_AsString(repository_path_object);
 
     // Load parameters.
     self->parameters_->loadFile(indri::file::Path::combine(repository_path, "manifest"));
@@ -159,8 +155,10 @@ static PyObject* Index_get_document_ids(Index* self, PyObject* args) {
     std::vector<std::string> ext_document_ids;
 
     while (item = PyIter_Next(iterator)) {
+        CHECK(PyBytes_CheckExact(item));
+
         // Get a pointer to the internal string of the PyObject.
-        char* const ext_document_id = PyString_AsString(item);
+        char* const ext_document_id = PyBytes_AsString(item);
 
         // Create a copy of the string.
         ext_document_ids.push_back(ext_document_id);
@@ -203,8 +201,8 @@ static PyObject* Index_get_document_ids(Index* self, PyObject* args) {
         PyTuple_SetItem(doc_ids_tuple,
                         pos,
                         PyTuple_Pack(2,
-                            PyString_FromString(ext_document_id.c_str()),
-                            PyInt_FromLong(int_document_id)));
+                            PyBytes_FromString(ext_document_id.c_str()),
+                            PyLong_FromLong(int_document_id)));
     }
 
     return doc_ids_tuple;
@@ -250,32 +248,32 @@ static PyObject* Index_document(Index* self, PyObject* args) {
 
     Py_ssize_t pos = 0;
     for (; term_it != term_list->terms().end(); ++term_it, ++pos) {
-        PyTuple_SetItem(terms, pos, PyInt_FromLong(*term_it));
+        PyTuple_SetItem(terms, pos, PyLong_FromLong(*term_it));
     }
 
     delete term_list;
 
-    return PyTuple_Pack(2, PyString_FromString(ext_document_id.c_str()), terms);
+    return PyTuple_Pack(2, PyBytes_FromString(ext_document_id.c_str()), terms);
 }
 
 static PyObject* Index_document_base(Index* self) {
-    return PyInt_FromLong(self->index_->documentBase());
+    return PyLong_FromLong(self->index_->documentBase());
 }
 
 static PyObject* Index_maximum_document(Index* self) {
-    return PyInt_FromLong(self->index_->documentMaximum());
+    return PyLong_FromLong(self->index_->documentMaximum());
 }
 
 static PyObject* Index_document_count(Index* self) {
-    return PyInt_FromLong(self->index_->documentCount());
+    return PyLong_FromLong(self->index_->documentCount());
 }
 
 static PyObject* Index_total_terms(Index* self) {
-    return PyInt_FromLong(self->index_->termCount());
+    return PyLong_FromLong(self->index_->termCount());
 }
 
 static PyObject* Index_unique_terms(Index* self) {
-    return PyInt_FromLong(self->index_->uniqueTermCount());
+    return PyLong_FromLong(self->index_->uniqueTermCount());
 }
 
 static PyObject* Index_term_count(Index* self, PyObject* args) {
@@ -285,7 +283,7 @@ static PyObject* Index_term_count(Index* self, PyObject* args) {
         return NULL;
     }
 
-    return PyInt_FromLong(self->index_->termCount(term_object));
+    return PyLong_FromLong(self->index_->termCount(term_object));
 }
 
 static PyObject* Index_document_length(Index* self, PyObject* args) {
@@ -295,7 +293,7 @@ static PyObject* Index_document_length(Index* self, PyObject* args) {
         return NULL;
     }
 
-    return PyInt_FromLong(self->index_->documentLength(int_document_id));
+    return PyLong_FromLong(self->index_->documentLength(int_document_id));
 }
 
 static PyObject* Index_run_query(Index* self, PyObject* args, PyObject* kwds) {
@@ -318,19 +316,11 @@ static PyObject* Index_run_query(Index* self, PyObject* args, PyObject* kwds) {
         return NULL;
     }
 
-    if (results_requested <= 0) {
-        if (document_set != NULL) {
-            results_requested = PySequence_Size(document_set);
-        } else {
-            results_requested = 100;
-        }
-    }
-
-    CHECK_GT(results_requested, 0);
-
     std::vector<lemur::api::DOCID_T> document_ids;
 
     if (document_set != NULL) {
+        CHECK(PyIter_Check(document_set));
+
         PyObject* const iterator = PyObject_GetIter(document_set);
         PyObject *item;
 
@@ -345,9 +335,9 @@ static PyObject* Index_run_query(Index* self, PyObject* args, PyObject* kwds) {
         }
 
         while (item = PyIter_Next(iterator)) {
-            CHECK(PyInt_CheckExact(item));
+            CHECK(PyLong_CheckExact(item));
 
-            const lemur::api::DOCID_T int_doc_id = PyInt_AsLong(item);
+            const lemur::api::DOCID_T int_doc_id = PyLong_AsLong(item);
             if (int_doc_id < 0) {
                 continue;
             }
@@ -359,6 +349,16 @@ static PyObject* Index_run_query(Index* self, PyObject* args, PyObject* kwds) {
 
         Py_DECREF(iterator);
     }
+
+    if (results_requested <= 0) {
+        if (document_set != NULL) {
+            results_requested = document_ids.size();
+        } else {
+            results_requested = 100;
+        }
+    }
+
+    CHECK_GT(results_requested, 0);
 
     indri::api::QueryAnnotation* query_annotation;
 
@@ -422,11 +422,11 @@ static PyObject* Index_run_query(Index* self, PyObject* args, PyObject* kwds) {
     for (; it != query_results.end(); ++it, ++pos) {
         PyObject* const result = PyTuple_New(include_snippets ? 3 : 2);
 
-        PyTuple_SetItem(result, 0, PyInt_FromLong(it->document));
+        PyTuple_SetItem(result, 0, PyLong_FromLong(it->document));
         PyTuple_SetItem(result, 1, PyFloat_FromDouble(it->score));
 
         if (include_snippets) {
-            PyTuple_SetItem(result, 2, PyString_FromString(snippets[pos].c_str()));
+            PyTuple_SetItem(result, 2, PyBytes_FromString(snippets[pos].c_str()));
         }
 
        PyTuple_SetItem(results, pos, result);
@@ -455,15 +455,15 @@ static PyObject* Index_get_dictionary(Index* self, PyObject* args) {
 
         PyDict_SetItemString(token2id,
                              term.c_str(),
-                             PyInt_FromLong(term_id));
+                             PyLong_FromLong(term_id));
 
         PyDict_SetItem(id2token,
-                       PyInt_FromLong(term_id),
-                       PyString_FromString(term.c_str()));
+                       PyLong_FromLong(term_id),
+                       PyBytes_FromString(term.c_str()));
 
         PyDict_SetItem(id2df,
-                       PyInt_FromLong(term_id),
-                       PyInt_FromLong(document_frequency));
+                       PyLong_FromLong(term_id),
+                       PyLong_FromLong(document_frequency));
 
         vocabulary_it->nextEntry();
     }
@@ -493,8 +493,8 @@ static PyObject* Index_get_term_frequencies(Index* self, PyObject* args) {
         CHECK_GT(term_frequency, 0);
 
         PyDict_SetItem(id2tf,
-                       PyInt_FromLong(term_id),
-                       PyInt_FromLong(term_frequency));
+                       PyLong_FromLong(term_id),
+                       PyLong_FromLong(term_frequency));
 
         vocabulary_it->nextEntry();
     }
@@ -540,27 +540,26 @@ static PyMethodDef Index_methods[] = {
 };
 
 static PyTypeObject IndexType = {
-    PyObject_HEAD_INIT(NULL)
-    0,                         /*ob_size*/
-    "pyndri.Index",             /*tp_name*/
-    sizeof(Index),             /*tp_basicsize*/
-    0,                         /*tp_itemsize*/
-    (destructor) Index_dealloc, /*tp_dealloc*/
-    0,                         /*tp_print*/
-    0,                         /*tp_getattr*/
-    0,                         /*tp_setattr*/
-    0,                         /*tp_compare*/
-    0,                         /*tp_repr*/
-    0,                         /*tp_as_number*/
-    0,                         /*tp_as_sequence*/
-    0,                         /*tp_as_mapping*/
-    0,                         /*tp_hash */
-    0,                         /*tp_call*/
-    0,                         /*tp_str*/
-    0,                         /*tp_getattro*/
-    0,                         /*tp_setattro*/
-    0,                         /*tp_as_buffer*/
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /*tp_flags*/
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "pyndri.Index",             /* tp_name */
+    sizeof(Index),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor) Index_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /* tp_flags */
     "Index objects",           /* tp_doc */
     0,                   /* tp_traverse */
     0,                   /* tp_clear */
@@ -592,7 +591,7 @@ static PyObject* pyndri_stem(PyObject* self, PyObject* args) {
 
     static indri::parse::KrovetzStemmer stemmer;
 
-    return PyString_FromString(stemmer.kstem_stemmer(term));
+    return PyBytes_FromString(stemmer.kstem_stemmer(term));
 }
 
 static PyMethodDef PyndriMethods[] = {
@@ -601,13 +600,28 @@ static PyMethodDef PyndriMethods[] = {
     {NULL, NULL, 0, NULL}
 };
 
-PyMODINIT_FUNC initpyndri_ext(void) {
+static PyModuleDef PyndriModule = {
+    PyModuleDef_HEAD_INIT,
+    "pyndri_ext",
+    "Python interface to the Indri search engine.",
+    -1,
+    PyndriMethods,
+    NULL, NULL, NULL, NULL
+};
+
+PyMODINIT_FUNC PyInit_pyndri_ext(void) {
     if (PyType_Ready(&IndexType) < 0) {
-        return;
+        return NULL;
     }
 
-    PyObject* const module = Py_InitModule("pyndri_ext", PyndriMethods);
+    PyObject* const module = PyModule_Create(&PyndriModule);
+
+    if (module == NULL) {
+        return NULL;
+    }
 
     Py_INCREF(&IndexType);
     PyModule_AddObject(module, "Index", (PyObject*) &IndexType);
+
+    return module;
 }

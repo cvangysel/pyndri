@@ -4,7 +4,8 @@ pyndri_ext = Extension(
     'pyndri_ext',
     sources=['src/pyndri.cpp'],
     libraries=['indri', 'z', 'pthread', 'm'],
-    define_macros=[('P_NEEDS_GNU_CXX_NAMESPACE', '1')])
+    define_macros=[('P_NEEDS_GNU_CXX_NAMESPACE', '1')],
+    undef_macros=['NDEBUG'])
 
 setup(name='pyndri',
       version='1.0',
