@@ -35,13 +35,13 @@ typedef struct {
 } Index;
 
 static void Index_dealloc(Index* self) {
-    self->collection_->close();
+    // self->collection_->close();
     self->index_->close();
-    self->query_env_->close();
+    // self->query_env_->close();
 
     delete self->parameters_;
 
-    delete self->collection_;
+    // delete self->collection_;
     delete self->index_;
     delete self->query_env_;
 }
