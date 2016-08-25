@@ -35,10 +35,10 @@ class Dictionary(object):
         return self.iterkeys()
 
     def keys(self):
-        return self.iterkeys()
+        return self.keys()
 
     def iterkeys(self):
-        return self.id2token.iterkeys()
+        return self.id2token.keys()
 
     def __len__(self):
         return len(self.id2token)
@@ -49,20 +49,31 @@ class Dictionary(object):
 
     def _process_token(self, token):
         if self.krovetz_stemming:
-            return pyndri.stem(token)
+            try:
+                result = pyndri.stem(token)
+            except UnicodeEncodeError as e:
+                logging.error(e)
+
+                result = None
         else:
-            return token
+            result = token
+
+        return result
 
     def translate_token(self, token):
-        return self.token2id.get(self._process_token(token), None)
+        result = self.token2id.get(self._process_token(token), None)
+
+        return result
 
     def has_token(self, token):
-        return self._process_token(token) in self.token2id
+        result = self._process_token(token) in self.token2id
+
+        return result
 
     def doc2bow(self, document):
-        if isinstance(document, basestring):
+        if isinstance(document, str) or isinstance(document, bytes):
             raise TypeError(
-                'doc2bow expects an array of unicode tokens on input, '
+                'doc2bow expects an iterable of unicode tokens on input, '
                 'not a single string')
 
         counter = collections.defaultdict(int)
@@ -71,6 +82,8 @@ class Dictionary(object):
             if isinstance(token, int):
                 token_id = token
             else:
+                assert isinstance(token, str)
+
                 token_id = self.translate_token(token)
 
             if token_id is None:
@@ -78,7 +91,7 @@ class Dictionary(object):
 
             counter[token_id] += 1
 
-        return sorted(counter.iteritems())
+        return sorted(counter.items())
 
 
 def extract_dictionary(index):
