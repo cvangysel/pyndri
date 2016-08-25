@@ -14,9 +14,12 @@
 
 using std::string;
 
+#define ENCODING "latin1"
+
 #define CHECK(condition) assert(condition)
 #define CHECK_EQ(first, second) assert(first == second)
 #define CHECK_GT(first, second) assert(first > second)
+#define CHECK_GE(first, second) assert(first >= second)
 
 // Index
 
@@ -60,7 +63,7 @@ static PyObject* Index_new(PyTypeObject* type, PyObject* args, PyObject* kwds) {
 }
 
 static int Index_init(Index* self, PyObject* args, PyObject* kwds) {
-    char* repository_path = NULL;
+    char* repository_path = "";
 
     static char* kwlist[] = {"repository_path", NULL};
 
@@ -155,14 +158,15 @@ static PyObject* Index_get_document_ids(Index* self, PyObject* args) {
     std::vector<std::string> ext_document_ids;
 
     while (item = PyIter_Next(iterator)) {
-        CHECK(PyBytes_CheckExact(item));
+        CHECK(PyUnicode_CheckExact(item));
 
-        // Get a pointer to the internal string of the PyObject.
-        char* const ext_document_id = PyBytes_AsString(item);
+        PyObject* item_bytes = PyUnicode_AsEncodedString(item, ENCODING, "strict");
+        char* const ext_document_id = PyBytes_AsString(item_bytes);
 
         // Create a copy of the string.
         ext_document_ids.push_back(ext_document_id);
 
+        Py_DECREF(item_bytes);
         Py_DECREF(item);
     }
 
@@ -201,7 +205,10 @@ static PyObject* Index_get_document_ids(Index* self, PyObject* args) {
         PyTuple_SetItem(doc_ids_tuple,
                         pos,
                         PyTuple_Pack(2,
-                            PyBytes_FromString(ext_document_id.c_str()),
+                            PyUnicode_Decode(ext_document_id.c_str(),
+                                             ext_document_id.size(),
+                                             ENCODING,
+                                             "strict"),
                             PyLong_FromLong(int_document_id)));
     }
 
@@ -253,7 +260,13 @@ static PyObject* Index_document(Index* self, PyObject* args) {
 
     delete term_list;
 
-    return PyTuple_Pack(2, PyBytes_FromString(ext_document_id.c_str()), terms);
+    return PyTuple_Pack(
+        2,
+        PyUnicode_Decode(ext_document_id.c_str(),
+                         ext_document_id.size(),
+                         ENCODING,
+                         "strict"),
+        terms);
 }
 
 static PyObject* Index_document_base(Index* self) {
@@ -297,7 +310,7 @@ static PyObject* Index_document_length(Index* self, PyObject* args) {
 }
 
 static PyObject* Index_run_query(Index* self, PyObject* args, PyObject* kwds) {
-    char* query_str;
+    PyObject* query = NULL;
     PyObject* document_set = NULL;
     long results_requested = 0;
     bool include_snippets = false;
@@ -308,13 +321,18 @@ static PyObject* Index_run_query(Index* self, PyObject* args, PyObject* kwds) {
                              "include_snippets",
                              NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|Olb", kwlist,
-                                     &query_str,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "U|Olb", kwlist,
+                                     &query,
                                      &document_set,
                                      &results_requested,
                                      &include_snippets)) {
         return NULL;
     }
+
+    CHECK(PyUnicode_Check(query));
+
+    PyObject* query_bytes = PyUnicode_AsEncodedString(query, ENCODING, "strict");
+    char* query_str = PyBytes_AsString(query_bytes);
 
     std::vector<lemur::api::DOCID_T> document_ids;
 
@@ -330,6 +348,7 @@ static PyObject* Index_run_query(Index* self, PyObject* args, PyObject* kwds) {
                 "Passed object for document_set not iterable.");
 
             Py_DECREF(iterator);
+            Py_DECREF(query_bytes);
 
             return NULL;
         }
@@ -358,7 +377,7 @@ static PyObject* Index_run_query(Index* self, PyObject* args, PyObject* kwds) {
         }
     }
 
-    CHECK_GT(results_requested, 0);
+    CHECK_GE(results_requested, 0);
 
     indri::api::QueryAnnotation* query_annotation;
 
@@ -373,8 +392,12 @@ static PyObject* Index_run_query(Index* self, PyObject* args, PyObject* kwds) {
     } catch (const lemur::api::Exception& e) {
         PyErr_SetString(PyExc_IOError, e.what().c_str());
 
+        Py_DECREF(query_bytes);
+
         return NULL;
     }
+
+    Py_DECREF(query_bytes);
 
     std::vector<indri::api::ScoredExtentResult> query_results =
         query_annotation->getResults();
@@ -426,7 +449,10 @@ static PyObject* Index_run_query(Index* self, PyObject* args, PyObject* kwds) {
         PyTuple_SetItem(result, 1, PyFloat_FromDouble(it->score));
 
         if (include_snippets) {
-            PyTuple_SetItem(result, 2, PyBytes_FromString(snippets[pos].c_str()));
+            PyTuple_SetItem(result, 2, PyUnicode_Decode(snippets[pos].c_str(),
+                                                        snippets[pos].size(),
+                                                        ENCODING,
+                                                        "strict"));
         }
 
        PyTuple_SetItem(results, pos, result);
@@ -453,13 +479,19 @@ static PyObject* Index_get_dictionary(Index* self, PyObject* args) {
         const unsigned int document_frequency = term_data->termData->corpus.documentCount;
         CHECK_GT(document_frequency, 0);
 
-        PyDict_SetItemString(token2id,
-                             term.c_str(),
-                             PyLong_FromLong(term_id));
+        PyDict_SetItem(token2id,
+                       PyUnicode_Decode(term.c_str(),
+                                        term.size(),
+                                        ENCODING,
+                                        "strict"),
+                       PyLong_FromLong(term_id));
 
         PyDict_SetItem(id2token,
                        PyLong_FromLong(term_id),
-                       PyBytes_FromString(term.c_str()));
+                       PyUnicode_Decode(term.c_str(),
+                                        term.size(),
+                                        ENCODING,
+                                        "strict"));
 
         PyDict_SetItem(id2df,
                        PyLong_FromLong(term_id),
@@ -583,15 +615,38 @@ static PyTypeObject IndexType = {
 // Module methods.
 
 static PyObject* pyndri_stem(PyObject* self, PyObject* args) {
-    char* term;
+    PyObject* term;
 
-    if (!PyArg_ParseTuple(args, "s", &term)) {
+    if (!PyArg_ParseTuple(args, "U", &term)) {
         return NULL;
     }
 
-    static indri::parse::KrovetzStemmer stemmer;
+    CHECK(PyUnicode_Check(term));
 
-    return PyBytes_FromString(stemmer.kstem_stemmer(term));
+    PyObject* term_bytes = PyUnicode_AsEncodedString(term, ENCODING, "strict");
+
+    if (term_bytes == NULL) {
+        return NULL;
+    }
+
+    char* term_str = PyBytes_AsString(term_bytes);
+
+    static indri::parse::KrovetzStemmer stemmer;
+    std::string stemmed_term(stemmer.kstem_stemmer(term_str));
+
+    Py_DECREF(term_bytes);
+
+    PyObject* result = PyUnicode_Decode(stemmed_term.c_str(),
+                                        stemmed_term.size(),
+                                        ENCODING,
+                                        "strict");
+
+    // Canonical; to indicate that result can be NULL.
+    if (result == NULL) {
+        return NULL;
+    }
+
+    return result;
 }
 
 static PyMethodDef PyndriMethods[] = {
