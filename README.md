@@ -19,8 +19,8 @@ How to iterate over all documents in a repository:
 
     index = pyndri.Index('/path/to/indri/index')
 
-    for document_id in xrange(index.document_base(), index.maximum_document()):
-        print index.document(document_id)
+    for document_id in range(index.document_base(), index.maximum_document()):
+        print(index.document(document_id))
 
 The above will output pairs of external document identifiers and document terms:
 
@@ -41,14 +41,14 @@ How to launch a Indri query to an index and get the identifiers and scores of re
 
     for int_document_id, score in results:
         ext_document_id, _ = index.document(int_document_id)
-        print ext_document_id, score
+        print(ext_document_id, score)
 
 The above will print document identifiers and language modeling scores:
 
-    eUK306804, -8.77414652243
-    eUK700967, -8.8712247934
-    eUK437700, -8.88184436222
-    eUK107263, -8.89119022464
+    eUK306804 -8.77414652243
+    eUK700967 -8.8712247934
+    eUK437700 -8.88184436222
+    eUK107263 -8.89119022464
     ...
 
 The token to term identifier mapping can be extracted as follows:
