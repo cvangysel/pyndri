@@ -4,6 +4,7 @@ from pyndri_ext import *
 __all__ = [
     'Index',
     'Dictionary',
+    'QueryEnvironment',
     'extract_dictionary',
     'stem',
 ]

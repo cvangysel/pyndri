@@ -74,6 +74,9 @@ ACT I  PROLOGUE  Two households, both alike in dignity, In fair Verona, where we
         self.assertEqual(self.index.document_base(), 1)
         self.assertEqual(self.index.maximum_document(), 4)
 
+        self.assertEqual(self.index.path,
+                         os.path.join(self.test_dir, 'index'))
+
     def test_simple_query(self):
         self.assertEqual(
             self.index.query('ipsum'),
@@ -159,6 +162,33 @@ ACT I  PROLOGUE  Two households, both alike in dignity, In fair Verona, where we
 
         self.assertEqual(ext_doc_ids,
                          ['lorem', 'hamlet', 'romeo'])
+
+    def test_query_environment(self):
+        env = pyndri.QueryEnvironment(
+            self.index,
+            rules=('method:linear,collectionLambda:0.4,documentLambda:0.2',))
+
+        self.assertEqual(
+            env.query('ipsum'),
+            ((1, -4.911066480756002),))
+
+        self.assertEqual(
+            env.query('his'),
+            ((2, -4.6518844642777),
+             (3, -6.1469416959076195)))
+
+        another_env = pyndri.QueryEnvironment(
+            self.index,
+            rules=('method:linear,collectionLambda:1.0,documentLambda:0.0',))
+
+        self.assertEqual(
+            another_env.query('ipsum'),
+            ((1, -6.595780513961311),))
+
+        self.assertEqual(
+            another_env.query('his'),
+            ((3, -5.902633333401366),
+             (2, -5.902633333401366)))
 
     def tearDown(self):
         shutil.rmtree(self.test_dir)

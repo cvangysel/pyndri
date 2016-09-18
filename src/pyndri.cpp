@@ -20,11 +20,17 @@ using std::string;
 #define CHECK_EQ(first, second) assert(first == second)
 #define CHECK_GT(first, second) assert(first > second)
 #define CHECK_GE(first, second) assert(first >= second)
+#define CHECK_NOTNULL(condition) assert(condition != 0)
+
+static PyTypeObject IndexType;
+static PyTypeObject QueryEnvironmentType;
 
 // Index
 
 typedef struct {
     PyObject_HEAD
+
+    char* repository_path_;
 
     indri::api::Parameters* parameters_;
 
@@ -32,6 +38,8 @@ typedef struct {
     indri::index::DiskIndex* index_;
 
     indri::api::QueryEnvironment* query_env_;
+
+    PyObject* query_env_obj_;
 } Index;
 
 static void Index_dealloc(Index* self) {
@@ -44,6 +52,11 @@ static void Index_dealloc(Index* self) {
     // delete self->collection_;
     delete self->index_;
     delete self->query_env_;
+
+    delete [] self->repository_path_;
+
+    Py_DECREF(self->query_env_obj_);
+    self->query_env_obj_ = NULL;
 }
 
 static PyObject* Index_new(PyTypeObject* type, PyObject* args, PyObject* kwds) {
@@ -51,19 +64,23 @@ static PyObject* Index_new(PyTypeObject* type, PyObject* args, PyObject* kwds) {
 
     self = (Index*) type->tp_alloc(type, 0);
     if (self != NULL) {
+        self->repository_path_ = NULL;
+
         self->parameters_ = new indri::api::Parameters;
 
         self->collection_ = new indri::collection::CompressedCollection;
         self->index_ = new indri::index::DiskIndex;
 
         self->query_env_ = new indri::api::QueryEnvironment;
+
+        self->query_env_obj_ = NULL;
     }
 
     return (PyObject*) self;
 }
 
 static int Index_init(Index* self, PyObject* args, PyObject* kwds) {
-    char* repository_path = "";
+    const char* repository_path = NULL;
 
     static char* kwlist[] = {"repository_path", NULL};
 
@@ -71,6 +88,12 @@ static int Index_init(Index* self, PyObject* args, PyObject* kwds) {
                                      &repository_path)) {
         return -1;
     }
+
+    const size_t repository_path_length = strlen(repository_path);
+
+    self->repository_path_ = new char[repository_path_length + 1];
+    memcpy(self->repository_path_, repository_path, repository_path_length);
+    self->repository_path_[repository_path_length] = 0;
 
     // Load parameters.
     self->parameters_->loadFile(indri::file::Path::combine(repository_path, "manifest"));
@@ -116,6 +139,7 @@ static int Index_init(Index* self, PyObject* args, PyObject* kwds) {
         return -1;
     }
 
+    // TODO(cvangysel): possibly remove query_env_ in the future.
     try {
         self->query_env_->addIndex(repository_path);
     } catch (const lemur::api::Exception& e) {
@@ -124,10 +148,18 @@ static int Index_init(Index* self, PyObject* args, PyObject* kwds) {
         return -1;
     }
 
+    // Construct the default QueryEnvironment.
+    self->query_env_obj_ = PyObject_CallFunction(
+        (PyObject*) &QueryEnvironmentType,
+        "O", self);
+
+    CHECK_NOTNULL(self->query_env_obj_);
+
     return 0;
 }
 
 static PyMemberDef Index_members[] = {
+    {"path", T_STRING, offsetof(Index, repository_path_), READONLY, "path to repository"},
     {NULL}  /* Sentinel */
 };
 
@@ -310,6 +342,197 @@ static PyObject* Index_document_length(Index* self, PyObject* args) {
 }
 
 static PyObject* Index_run_query(Index* self, PyObject* args, PyObject* kwds) {
+    PyObject* query_fn = PyObject_GetAttrString(self->query_env_obj_, "query");
+    PyObject* result = PyObject_Call(query_fn, args, kwds);
+    Py_DECREF(query_fn);
+
+    return result;
+}
+
+static PyObject* Index_get_dictionary(Index* self, PyObject* args) {
+    indri::index::VocabularyIterator* const vocabulary_it = self->index_->vocabularyIterator();
+
+    PyObject* const token2id = PyDict_New();
+    PyObject* const id2token = PyDict_New();
+    PyObject* const id2df = PyDict_New();
+
+    vocabulary_it->startIteration();
+
+    while (!vocabulary_it->finished()) {
+        indri::index::DiskTermData* const term_data = vocabulary_it->currentEntry();
+
+        const lemur::api::TERMID_T term_id = term_data->termID;
+        const string term = term_data->termData->term;
+
+        const unsigned int document_frequency = term_data->termData->corpus.documentCount;
+        CHECK_GT(document_frequency, 0);
+
+        PyDict_SetItem(token2id,
+                       PyUnicode_Decode(term.c_str(),
+                                        term.size(),
+                                        ENCODING,
+                                        "strict"),
+                       PyLong_FromLong(term_id));
+
+        PyDict_SetItem(id2token,
+                       PyLong_FromLong(term_id),
+                       PyUnicode_Decode(term.c_str(),
+                                        term.size(),
+                                        ENCODING,
+                                        "strict"));
+
+        PyDict_SetItem(id2df,
+                       PyLong_FromLong(term_id),
+                       PyLong_FromLong(document_frequency));
+
+        vocabulary_it->nextEntry();
+    }
+
+    delete vocabulary_it;
+
+    CHECK_EQ(PyDict_Size(token2id), self->index_->uniqueTermCount());
+    CHECK_EQ(PyDict_Size(id2token), self->index_->uniqueTermCount());
+    CHECK_EQ(PyDict_Size(id2df), self->index_->uniqueTermCount());
+
+    return PyTuple_Pack(3, token2id, id2token, id2df);
+}
+
+static PyObject* Index_get_term_frequencies(Index* self, PyObject* args) {
+    indri::index::VocabularyIterator* const vocabulary_it = self->index_->vocabularyIterator();
+
+    PyObject* const id2tf = PyDict_New();
+
+    vocabulary_it->startIteration();
+
+    while (!vocabulary_it->finished()) {
+        indri::index::DiskTermData* const term_data = vocabulary_it->currentEntry();
+
+        const lemur::api::TERMID_T term_id = term_data->termID;
+
+        const uint64_t term_frequency = term_data->termData->corpus.totalCount;
+        CHECK_GT(term_frequency, 0);
+
+        PyDict_SetItem(id2tf,
+                       PyLong_FromLong(term_id),
+                       PyLong_FromLong(term_frequency));
+
+        vocabulary_it->nextEntry();
+    }
+
+    delete vocabulary_it;
+
+    CHECK_EQ(PyDict_Size(id2tf), self->index_->uniqueTermCount());
+
+    return id2tf;
+}
+
+static PyMethodDef Index_methods[] = {
+    {"document_ids", (PyCFunction) Index_get_document_ids, METH_VARARGS,
+     "Returns the internal DOC_IDs given the external identifiers."},
+    {"document", (PyCFunction) Index_document, METH_VARARGS,
+     "Return a document (ext_document_id, terms) pair."},
+    {"document_base", (PyCFunction) Index_document_base, METH_NOARGS,
+     "Returns the lower bound document identifier (inclusive)."},
+    {"maximum_document", (PyCFunction) Index_maximum_document, METH_NOARGS,
+     "Returns the upper bound document identifier (exclusive)."},
+
+    {"document_count", (PyCFunction) Index_document_count, METH_NOARGS,
+     "Returns the number of documents in the index."},
+    {"document_length", (PyCFunction) Index_document_length, METH_VARARGS,
+     "Returns the length of a document."},
+
+    {"total_terms", (PyCFunction) Index_total_terms, METH_NOARGS,
+     "Returns the number of total terms in the index."},
+    {"unique_terms", (PyCFunction) Index_unique_terms, METH_NOARGS,
+     "Returns the number of unique terms in the index."},
+
+    {"term_count", (PyCFunction) Index_term_count, METH_VARARGS,
+     "Return the term frequency for a term."},
+
+    {"query", (PyCFunction) Index_run_query, METH_VARARGS | METH_KEYWORDS,
+     "Queries an Indri index."},
+
+    {"get_dictionary", (PyCFunction) Index_get_dictionary, METH_NOARGS,
+     "Extracts the dictionary from the index."},
+    {"get_term_frequencies", (PyCFunction) Index_get_term_frequencies, METH_NOARGS,
+     "Extracts the term frequencies from the index."},
+    {NULL}  /* Sentinel */
+};
+
+// QueryEnvironment
+
+typedef struct {
+    PyObject_HEAD
+
+    PyObject* index_;
+    indri::api::QueryEnvironment* query_env_;
+} QueryEnvironment;
+
+static void QueryEnvironment_dealloc(QueryEnvironment* self) {
+    Py_DECREF(self->index_);
+    self->index_ = NULL;
+
+    // self->query_env_->close();
+    delete self->query_env_;
+}
+
+static PyObject* QueryEnvironment_new(PyTypeObject* type, PyObject* args, PyObject* kwds) {
+    QueryEnvironment* self;
+
+    self = (QueryEnvironment*) type->tp_alloc(type, 0);
+    if (self != NULL) {
+        self->index_ = NULL;
+        self->query_env_ = new indri::api::QueryEnvironment;
+    }
+
+    return (PyObject*) self;
+}
+
+static int QueryEnvironment_init(QueryEnvironment* self, PyObject* args, PyObject* kwds) {
+    PyObject* index_obj = NULL;
+    PyObject* rules_obj = NULL;
+
+    static char* kwlist[] = {"index",
+                             "rules",
+                             NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|O!", kwlist,
+                                     &IndexType, &index_obj,
+                                     &PyTuple_Type, &rules_obj)) {
+        return -1;
+    }
+
+    self->index_ = index_obj;
+    Py_INCREF(self->index_);
+
+    PyObject* repostitory_path_obj = PyObject_GetAttrString(
+        self->index_, "path");
+    CHECK_NOTNULL(repostitory_path_obj);
+
+    try {
+        self->query_env_->addIndex(PyUnicode_AsUTF8(repostitory_path_obj));
+    } catch (const lemur::api::Exception& e) {
+        PyErr_SetString(PyExc_IOError, e.what().c_str());
+
+        return -1;
+    }
+
+    Py_DECREF(repostitory_path_obj);
+
+    std::vector<std::string> rules;
+
+    if (rules_obj != NULL) {
+        for (Py_ssize_t i = 0; i < PyTuple_Size(rules_obj); ++i) {
+            rules.push_back(PyUnicode_AsUTF8(PyTuple_GetItem(rules_obj, i)));
+        }
+
+        self->query_env_->setScoringRules(rules);
+    }
+
+    return 0;
+}
+
+static PyObject* QueryEnvironment_run_query(QueryEnvironment* self, PyObject* args, PyObject* kwds) {
     PyObject* query = NULL;
     PyObject* document_set = NULL;
     long results_requested = 0;
@@ -461,155 +684,15 @@ static PyObject* Index_run_query(Index* self, PyObject* args, PyObject* kwds) {
     return results;
 }
 
-static PyObject* Index_get_dictionary(Index* self, PyObject* args) {
-    indri::index::VocabularyIterator* const vocabulary_it = self->index_->vocabularyIterator();
-
-    PyObject* const token2id = PyDict_New();
-    PyObject* const id2token = PyDict_New();
-    PyObject* const id2df = PyDict_New();
-
-    vocabulary_it->startIteration();
-
-    while (!vocabulary_it->finished()) {
-        indri::index::DiskTermData* const term_data = vocabulary_it->currentEntry();
-
-        const lemur::api::TERMID_T term_id = term_data->termID;
-        const string term = term_data->termData->term;
-
-        const unsigned int document_frequency = term_data->termData->corpus.documentCount;
-        CHECK_GT(document_frequency, 0);
-
-        PyDict_SetItem(token2id,
-                       PyUnicode_Decode(term.c_str(),
-                                        term.size(),
-                                        ENCODING,
-                                        "strict"),
-                       PyLong_FromLong(term_id));
-
-        PyDict_SetItem(id2token,
-                       PyLong_FromLong(term_id),
-                       PyUnicode_Decode(term.c_str(),
-                                        term.size(),
-                                        ENCODING,
-                                        "strict"));
-
-        PyDict_SetItem(id2df,
-                       PyLong_FromLong(term_id),
-                       PyLong_FromLong(document_frequency));
-
-        vocabulary_it->nextEntry();
-    }
-
-    delete vocabulary_it;
-
-    CHECK_EQ(PyDict_Size(token2id), self->index_->uniqueTermCount());
-    CHECK_EQ(PyDict_Size(id2token), self->index_->uniqueTermCount());
-    CHECK_EQ(PyDict_Size(id2df), self->index_->uniqueTermCount());
-
-    return PyTuple_Pack(3, token2id, id2token, id2df);
-}
-
-static PyObject* Index_get_term_frequencies(Index* self, PyObject* args) {
-    indri::index::VocabularyIterator* const vocabulary_it = self->index_->vocabularyIterator();
-
-    PyObject* const id2tf = PyDict_New();
-
-    vocabulary_it->startIteration();
-
-    while (!vocabulary_it->finished()) {
-        indri::index::DiskTermData* const term_data = vocabulary_it->currentEntry();
-
-        const lemur::api::TERMID_T term_id = term_data->termID;
-
-        const uint64_t term_frequency = term_data->termData->corpus.totalCount;
-        CHECK_GT(term_frequency, 0);
-
-        PyDict_SetItem(id2tf,
-                       PyLong_FromLong(term_id),
-                       PyLong_FromLong(term_frequency));
-
-        vocabulary_it->nextEntry();
-    }
-
-    delete vocabulary_it;
-
-    CHECK_EQ(PyDict_Size(id2tf), self->index_->uniqueTermCount());
-
-    return id2tf;
-}
-
-static PyMethodDef Index_methods[] = {
-    {"document_ids", (PyCFunction) Index_get_document_ids, METH_VARARGS,
-     "Returns the internal DOC_IDs given the external identifiers."},
-    {"document", (PyCFunction) Index_document, METH_VARARGS,
-     "Return a document (ext_document_id, terms) pair."},
-    {"document_base", (PyCFunction) Index_document_base, METH_NOARGS,
-     "Returns the lower bound document identifier (inclusive)."},
-    {"maximum_document", (PyCFunction) Index_maximum_document, METH_NOARGS,
-     "Returns the upper bound document identifier (exclusive)."},
-
-    {"document_count", (PyCFunction) Index_document_count, METH_NOARGS,
-     "Returns the number of documents in the index."},
-    {"document_length", (PyCFunction) Index_document_length, METH_VARARGS,
-     "Returns the length of a document."},
-
-    {"total_terms", (PyCFunction) Index_total_terms, METH_NOARGS,
-     "Returns the number of total terms in the index."},
-    {"unique_terms", (PyCFunction) Index_unique_terms, METH_NOARGS,
-     "Returns the number of unique terms in the index."},
-
-    {"term_count", (PyCFunction) Index_term_count, METH_VARARGS,
-     "Return the term frequency for a term."},
-
-    {"query", (PyCFunction) Index_run_query, METH_VARARGS | METH_KEYWORDS,
-     "Queries an Indri index."},
-
-    {"get_dictionary", (PyCFunction) Index_get_dictionary, METH_NOARGS,
-     "Extracts the dictionary from the index."},
-    {"get_term_frequencies", (PyCFunction) Index_get_term_frequencies, METH_NOARGS,
-     "Extracts the term frequencies from the index."},
+static PyMemberDef QueryEnvironment_members[] = {
     {NULL}  /* Sentinel */
 };
 
-static PyTypeObject IndexType = {
-    PyVarObject_HEAD_INIT(NULL, 0)
-    "pyndri.Index",             /* tp_name */
-    sizeof(Index),             /* tp_basicsize */
-    0,                         /* tp_itemsize */
-    (destructor) Index_dealloc, /* tp_dealloc */
-    0,                         /* tp_print */
-    0,                         /* tp_getattr */
-    0,                         /* tp_setattr */
-    0,                         /* tp_reserved */
-    0,                         /* tp_repr */
-    0,                         /* tp_as_number */
-    0,                         /* tp_as_sequence */
-    0,                         /* tp_as_mapping */
-    0,                         /* tp_hash */
-    0,                         /* tp_call */
-    0,                         /* tp_str */
-    0,                         /* tp_getattro */
-    0,                         /* tp_setattro */
-    0,                         /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /* tp_flags */
-    "Index objects",           /* tp_doc */
-    0,                   /* tp_traverse */
-    0,                   /* tp_clear */
-    0,                   /* tp_richcompare */
-    0,                   /* tp_weaklistoffset */
-    0,                   /* tp_iter */
-    0,                   /* tp_iternext */
-    Index_methods,             /* tp_methods */
-    Index_members,             /* tp_members */
-    0,                         /* tp_getset */
-    0,                         /* tp_base */
-    0,                         /* tp_dict */
-    0,                         /* tp_descr_get */
-    0,                         /* tp_descr_set */
-    0,                         /* tp_dictoffset */
-    (initproc) Index_init,      /* tp_init */
-    0,                         /* tp_alloc */
-    Index_new,                 /* tp_new */
+static PyMethodDef QueryEnvironment_methods[] = {
+    {"query", (PyCFunction) QueryEnvironment_run_query, METH_VARARGS | METH_KEYWORDS,
+     "Queries an Indri index."},
+
+    {NULL}  /* Sentinel */
 };
 
 // Module methods.
@@ -665,7 +748,93 @@ static PyModuleDef PyndriModule = {
 };
 
 PyMODINIT_FUNC PyInit_pyndri_ext(void) {
+    IndexType = {
+        PyVarObject_HEAD_INIT(NULL, 0)
+        "pyndri.Index",             /* tp_name */
+        sizeof(Index),             /* tp_basicsize */
+        0,                         /* tp_itemsize */
+        (destructor) Index_dealloc, /* tp_dealloc */
+        0,                         /* tp_print */
+        0,                         /* tp_getattr */
+        0,                         /* tp_setattr */
+        0,                         /* tp_reserved */
+        0,                         /* tp_repr */
+        0,                         /* tp_as_number */
+        0,                         /* tp_as_sequence */
+        0,                         /* tp_as_mapping */
+        0,                         /* tp_hash */
+        0,                         /* tp_call */
+        0,                         /* tp_str */
+        0,                         /* tp_getattro */
+        0,                         /* tp_setattro */
+        0,                         /* tp_as_buffer */
+        Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /* tp_flags */
+        "Index objects",           /* tp_doc */
+        0,                   /* tp_traverse */
+        0,                   /* tp_clear */
+        0,                   /* tp_richcompare */
+        0,                   /* tp_weaklistoffset */
+        0,                   /* tp_iter */
+        0,                   /* tp_iternext */
+        Index_methods,             /* tp_methods */
+        Index_members,             /* tp_members */
+        0,                         /* tp_getset */
+        0,                         /* tp_base */
+        0,                         /* tp_dict */
+        0,                         /* tp_descr_get */
+        0,                         /* tp_descr_set */
+        0,                         /* tp_dictoffset */
+        (initproc) Index_init,      /* tp_init */
+        0,                         /* tp_alloc */
+        Index_new,                 /* tp_new */
+    };
+
     if (PyType_Ready(&IndexType) < 0) {
+        return NULL;
+    }
+
+    QueryEnvironmentType = {
+        PyVarObject_HEAD_INIT(NULL, 0)
+        "pyndri.QueryEnvironment",             /* tp_name */
+        sizeof(QueryEnvironment),             /* tp_basicsize */
+        0,                         /* tp_itemsize */
+        (destructor) QueryEnvironment_dealloc, /* tp_dealloc */
+        0,                         /* tp_print */
+        0,                         /* tp_getattr */
+        0,                         /* tp_setattr */
+        0,                         /* tp_reserved */
+        0,                         /* tp_repr */
+        0,                         /* tp_as_number */
+        0,                         /* tp_as_sequence */
+        0,                         /* tp_as_mapping */
+        0,                         /* tp_hash */
+        0,                         /* tp_call */
+        0,                         /* tp_str */
+        0,                         /* tp_getattro */
+        0,                         /* tp_setattro */
+        0,                         /* tp_as_buffer */
+        Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /* tp_flags */
+        "QueryEnvironment objects",           /* tp_doc */
+        0,                   /* tp_traverse */
+        0,                   /* tp_clear */
+        0,                   /* tp_richcompare */
+        0,                   /* tp_weaklistoffset */
+        0,                   /* tp_iter */
+        0,                   /* tp_iternext */
+        QueryEnvironment_methods,             /* tp_methods */
+        QueryEnvironment_members,             /* tp_members */
+        0,                         /* tp_getset */
+        0,                         /* tp_base */
+        0,                         /* tp_dict */
+        0,                         /* tp_descr_get */
+        0,                         /* tp_descr_set */
+        0,                         /* tp_dictoffset */
+        (initproc) QueryEnvironment_init,      /* tp_init */
+        0,                         /* tp_alloc */
+        QueryEnvironment_new,                 /* tp_new */
+    };
+
+    if (PyType_Ready(&QueryEnvironmentType) < 0) {
         return NULL;
     }
 
@@ -677,6 +846,9 @@ PyMODINIT_FUNC PyInit_pyndri_ext(void) {
 
     Py_INCREF(&IndexType);
     PyModule_AddObject(module, "Index", (PyObject*) &IndexType);
+
+    Py_INCREF(&QueryEnvironmentType);
+    PyModule_AddObject(module, "QueryEnvironment", (PyObject*) &QueryEnvironmentType);
 
     return module;
 }
