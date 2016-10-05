@@ -20,4 +20,5 @@ def escape(input):
         ord('.'): ' ',
         ord(':'): ' ',
         ord('\t'): ' ',
+        ord('/'): ' ',
     })

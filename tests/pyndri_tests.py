@@ -41,7 +41,9 @@ class ParsingTest(unittest.TestCase):
         self.assertRaises(OSError,
                           lambda: pyndri.tokenize('hello (world)'))
 
-        self.assertEqual(pyndri.tokenize(pyndri.escape('hello "world"')),
+        self.assertEqual(pyndri.tokenize(pyndri.escape('hello \'world\'')),
+                         ('hello', 'world',))
+        self.assertEqual(pyndri.tokenize(pyndri.escape('hello/world')),
                          ('hello', 'world',))
 
 
