@@ -8,12 +8,41 @@ import unittest
 import pyndri
 
 
-class KrovetzStemmingTest(unittest.TestCase):
+class ParsingTest(unittest.TestCase):
 
     def test_stemming(self):
         self.assertEqual(pyndri.stem('predictions'), 'prediction')
         self.assertEqual(pyndri.stem('marketing'), 'marketing')
         self.assertEqual(pyndri.stem('strategies'), 'strategy')
+
+    def test_escape(self):
+        self.assertEqual(pyndri.escape('hello (world)'),
+                         'hello world')
+        self.assertEqual(pyndri.escape('hello.world'),
+                         'hello world')
+        self.assertEqual(pyndri.escape('hello:world'),
+                         'hello world')
+
+    def test_tokenize(self):
+        self.assertEqual(pyndri.tokenize('hello world foo bar'),
+                         ('hello', 'world', 'foo', 'bar'))
+
+        self.assertEqual(pyndri.tokenize('hello-world'),
+                         ('hello', 'world'))
+
+        self.assertEqual(pyndri.tokenize('hello.world'),
+                         ('hello',))
+        self.assertEqual(pyndri.tokenize(pyndri.escape('hello.world')),
+                         ('hello', 'world'))
+
+        self.assertEqual(pyndri.tokenize('hello "world"'),
+                         ('hello', 'world',))
+
+        self.assertRaises(OSError,
+                          lambda: pyndri.tokenize('hello (world)'))
+
+        self.assertEqual(pyndri.tokenize(pyndri.escape('hello "world"')),
+                         ('hello', 'world',))
 
 
 class IndriTest(unittest.TestCase):

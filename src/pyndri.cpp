@@ -5,10 +5,13 @@
 #include <string>
 #include <iostream>
 
+#include <antlr/NoViableAltException.hpp>
 #include <indri/CompressedCollection.hpp>
 #include <indri/DiskIndex.hpp>
 #include <indri/KrovetzStemmer.hpp>
 #include <indri/QueryEnvironment.hpp>
+#include <indri/QueryParserFactory.hpp>
+#include <indri/QuerySpec.hpp>
 #include <indri/Path.hpp>
 #include "indri/SnippetBuilder.hpp"
 
@@ -732,9 +735,69 @@ static PyObject* pyndri_stem(PyObject* self, PyObject* args) {
     return result;
 }
 
+class TokenExtractor : public indri::lang::Walker {
+ public:
+    explicit TokenExtractor(std::vector<std::string>* const tokens) : tokens_(tokens) {
+        tokens_->clear();
+    }
+
+    virtual void defaultBefore(indri::lang::Node* node) {}
+
+    virtual void after(indri::lang::IndexTerm* node) {
+        tokens_->push_back(node->getText());
+    }
+
+ private:
+    std::vector<std::string>* const tokens_;
+};
+
+static PyObject* pyndri_tokenize(PyObject* self, PyObject* args) {
+    PyObject* input;
+
+    if (!PyArg_ParseTuple(args, "U", &input)) {
+        return NULL;
+    }
+
+    PyObject* input_bytes = PyUnicode_AsEncodedString(input, ENCODING, "strict");
+    char* input_str = PyBytes_AsString(input_bytes);
+
+    indri::api::QueryParserWrapper* const parser = indri::api::QueryParserFactory::get(input_str, "indri");
+
+    indri::lang::ScoredExtentNode* root_node = NULL;
+
+    try {
+        root_node = parser->query();
+    } catch (const antlr::NoViableAltException& e) {
+        PyErr_SetString(PyExc_IOError, e.getMessage().c_str());
+        Py_DECREF(input_bytes);
+
+        return NULL;
+    }
+
+    std::vector<std::string> tokens;
+
+    TokenExtractor extractor(&tokens);
+    root_node->walk(extractor);
+
+    Py_DECREF(input_bytes);
+
+    PyObject* const tokens_tuple = PyTuple_New(tokens.size());
+
+    for (size_t idx = 0; idx < tokens.size(); ++idx) {
+        PyTuple_SetItem(tokens_tuple, idx, PyUnicode_Decode(tokens[idx].c_str(),
+                                                            tokens[idx].size(),
+                                                            ENCODING,
+                                                            "strict"));
+    }
+
+    return tokens_tuple;
+}
+
 static PyMethodDef PyndriMethods[] = {
     {"stem", (PyCFunction) pyndri_stem, METH_VARARGS,
      "Return the Krovetz stemmed version of a term."},
+    {"tokenize", (PyCFunction) pyndri_tokenize, METH_VARARGS,
+     "Tokenize an input string."},
     {NULL, NULL, 0, NULL}
 };
 

@@ -7,4 +7,17 @@ __all__ = [
     'QueryEnvironment',
     'extract_dictionary',
     'stem',
+    'tokenize',
+    'escape',
 ]
+
+
+def escape(input):
+    return input.translate({
+        ord('('): None,
+        ord(')'): None,
+        ord('\''): '"',
+        ord('.'): ' ',
+        ord(':'): ' ',
+        ord('\t'): ' ',
+    })
