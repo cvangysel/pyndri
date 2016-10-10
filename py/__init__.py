@@ -16,9 +16,11 @@ def escape(input):
     return input.translate({
         ord('('): None,
         ord(')'): None,
-        ord('\''): '"',
+        ord('\''): None,  # '"',
         ord('.'): ' ',
         ord(':'): ' ',
         ord('\t'): ' ',
         ord('/'): ' ',
+        ord('&'): ' ',
+        ord(','): ' ',
     })

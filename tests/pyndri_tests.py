@@ -108,6 +108,12 @@ ACT I  PROLOGUE  Two households, both alike in dignity, In fair Verona, where we
         self.assertEqual(self.index.path,
                          os.path.join(self.test_dir, 'index'))
 
+    def test_process_term(self):
+        self.assertEqual(self.index.process_term('HELLO'), 'hello')
+
+        # Applies Krovetz stemming.
+        self.assertEqual(self.index.process_term('Greek'), 'greece')
+
     def test_simple_query(self):
         self.assertEqual(
             self.index.query('ipsum'),

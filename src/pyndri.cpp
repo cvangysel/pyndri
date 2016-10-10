@@ -6,6 +6,13 @@
 #include <iostream>
 
 #include <antlr/NoViableAltException.hpp>
+#include <antlr/MismatchedTokenException.hpp>
+#include <antlr/TokenStreamRecognitionException.hpp>
+
+#define private public
+#include <indri/LocalQueryServer.hpp>
+#undef private
+
 #include <indri/CompressedCollection.hpp>
 #include <indri/DiskIndex.hpp>
 #include <indri/KrovetzStemmer.hpp>
@@ -334,6 +341,26 @@ static PyObject* Index_term_count(Index* self, PyObject* args) {
     return PyLong_FromLong(self->index_->termCount(term_object));
 }
 
+static PyObject* Index_process_term(Index* self, PyObject* args) {
+    char* term_object;
+
+    if (!PyArg_ParseTuple(args, "s", &term_object)) {
+        return NULL;
+    }
+
+    indri::collection::Repository* const repository =
+        &dynamic_cast<indri::server::LocalQueryServer*>(
+            self->query_env_->getServers()[0])->_repository;
+
+    const std::string processed_term =
+        repository->processTerm(term_object);
+
+    return PyUnicode_Decode(processed_term.c_str(),
+                            processed_term.size(),
+                            ENCODING,
+                            "strict");
+}
+
 static PyObject* Index_document_length(Index* self, PyObject* args) {
     int int_document_id;
 
@@ -451,6 +478,9 @@ static PyMethodDef Index_methods[] = {
 
     {"term_count", (PyCFunction) Index_term_count, METH_VARARGS,
      "Return the term frequency for a term."},
+
+    {"process_term", (PyCFunction) Index_process_term, METH_VARARGS,
+     "Pre-processes an index term."},
 
     {"query", (PyCFunction) Index_run_query, METH_VARARGS | METH_KEYWORDS,
      "Queries an Indri index."},
@@ -769,8 +799,15 @@ static PyObject* pyndri_tokenize(PyObject* self, PyObject* args) {
         root_node = parser->query();
     } catch (const antlr::NoViableAltException& e) {
         PyErr_SetString(PyExc_IOError, e.getMessage().c_str());
-        Py_DECREF(input_bytes);
+    } catch (const antlr::MismatchedTokenException& e) {
+        PyErr_SetString(PyExc_IOError, e.getMessage().c_str());
+    } catch (const antlr::TokenStreamRecognitionException& e) {
+        PyErr_SetString(PyExc_IOError, e.getMessage().c_str());
+    }
 
+    Py_DECREF(input_bytes);
+
+    if (root_node == NULL) {
         return NULL;
     }
 
@@ -778,8 +815,6 @@ static PyObject* pyndri_tokenize(PyObject* self, PyObject* args) {
 
     TokenExtractor extractor(&tokens);
     root_node->walk(extractor);
-
-    Py_DECREF(input_bytes);
 
     PyObject* const tokens_tuple = PyTuple_New(tokens.size());
 
