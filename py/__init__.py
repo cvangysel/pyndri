@@ -23,4 +23,5 @@ def escape(input):
         ord('/'): ' ',
         ord('&'): ' ',
         ord(','): ' ',
+        ord('-'): ' ',
     })
