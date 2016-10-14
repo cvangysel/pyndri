@@ -15,7 +15,7 @@ class Dictionary(object):
     This class is compatible with gensim.
     """
 
-    def __init__(self, token2id, id2token, id2df, krovetz_stemming=True):
+    def __init__(self, token2id, id2token, id2df, krovetz_stemming):
         assert len(token2id) == len(id2token)
 
         self.token2id = token2id
@@ -94,10 +94,10 @@ class Dictionary(object):
         return sorted(counter.items())
 
 
-def extract_dictionary(index):
+def extract_dictionary(index, **kwargs):
     assert isinstance(index, pyndri.Index)
 
     logging.debug('Extracting dictionary from index %s.', index)
     token2id, id2token, id2df = index.get_dictionary()
 
-    return Dictionary(token2id, id2token, id2df)
+    return Dictionary(token2id, id2token, id2df, **kwargs)
