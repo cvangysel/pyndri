@@ -114,7 +114,7 @@ def extract_dictionary(index,
     else:
         indri_id2cid = None
 
-    dictionary = Dictionary(token2id, id2token, id2df, **kwargs), indri_id2cid
+    dictionary = Dictionary(token2id, id2token, id2df, **kwargs)
 
     if make_contiguous:
         return dictionary, indri_id2cid
