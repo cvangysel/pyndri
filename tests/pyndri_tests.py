@@ -227,6 +227,30 @@ ACT I  PROLOGUE  Two households, both alike in dignity, In fair Verona, where we
             ((3, -5.902633333401366),
              (2, -5.902633333401366)))
 
+    def test_tfidf(self):
+        env = pyndri.TFIDFQueryEnvironment(self.index)
+
+        self.assertEqual(
+            env.query('ipsum'),
+            ((1, 0.7098885466183784),))
+
+        self.assertEqual(
+            env.query('his'),
+            ((2, 0.16955104430709383),
+             (3, 0.07757942488345955)))
+
+    def test_okapi(self):
+        env = pyndri.OkapiQueryEnvironment(self.index)
+
+        self.assertEqual(
+            env.query('ipsum'),
+            ((1, 0.691753771033259),))
+
+        self.assertEqual(
+            env.query('his'),
+            ((3, -0.3292246306130194),
+             (2, -0.7195255702901702)))
+
     def test_tokenize(self):
         self.assertEqual(
             self.index.tokenize('hello world foo bar'),

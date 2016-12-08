@@ -561,14 +561,15 @@ static PyObject* QueryEnvironment_new(PyTypeObject* type, PyObject* args, PyObje
 static int QueryEnvironment_init(QueryEnvironment* self, PyObject* args, PyObject* kwds) {
     PyObject* index_obj = NULL;
     PyObject* rules_obj = NULL;
+    PyObject* baseline_obj = NULL;
 
-    static char* kwlist[] = {"index",
-                             "rules",
+    static char* kwlist[] = {"index", "rules", "baseline",
                              NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|O!", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|O!O!", kwlist,
                                      &IndexType, &index_obj,
-                                     &PyTuple_Type, &rules_obj)) {
+                                     &PyTuple_Type, &rules_obj,
+                                     &PyUnicode_Type, &baseline_obj)) {
         return -1;
     }
 
@@ -589,14 +590,21 @@ static int QueryEnvironment_init(QueryEnvironment* self, PyObject* args, PyObjec
 
     Py_DECREF(repostitory_path_obj);
 
-    std::vector<std::string> rules;
+    if (rules_obj != NULL && baseline_obj != NULL) {
+        PyErr_SetString(PyExc_RuntimeError, "Unable to specify smoothing rules for baseline.");
 
-    if (rules_obj != NULL) {
+        return -1;
+    } else if (rules_obj != NULL) {
+        std::vector<std::string> rules;
+
         for (Py_ssize_t i = 0; i < PyTuple_Size(rules_obj); ++i) {
             rules.push_back(PyUnicode_AsUTF8(PyTuple_GetItem(rules_obj, i)));
         }
 
         self->query_env_->setScoringRules(rules);
+    } else if (baseline_obj != NULL) {
+        const std::string baseline = PyUnicode_AsUTF8(baseline_obj);
+        self->query_env_->setBaseline(baseline);
     }
 
     return 0;
