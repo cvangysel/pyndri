@@ -311,6 +311,39 @@ static PyObject* Index_document(Index* self, PyObject* args) {
         terms);
 }
 
+static PyObject* Index_ext_document_id(Index* self, PyObject* args) {
+    int int_document_id;
+
+    if (!PyArg_ParseTuple(args, "i", &int_document_id)) {
+        return NULL;
+    }
+
+    if (int_document_id < self->index_->documentBase() ||
+        int_document_id >= self->index_->documentMaximum()) {
+        PyErr_SetString(
+            PyExc_IndexError,
+            "Specified internal document identifier is out of bounds.");
+
+        return NULL;
+    }
+
+    string ext_document_id;
+
+    try {
+        ext_document_id = self->collection_->retrieveMetadatum(
+            int_document_id, "docno");
+    } catch (const lemur::api::Exception& e) {
+        PyErr_SetString(PyExc_IOError, e.what().c_str());
+
+        return NULL;
+    }
+
+    return PyUnicode_Decode(ext_document_id.c_str(),
+                            ext_document_id.size(),
+                            ENCODING,
+                            "strict");
+}
+
 static PyObject* Index_document_base(Index* self) {
     return PyLong_FromLong(self->index_->documentBase());
 }
@@ -461,6 +494,8 @@ static PyMethodDef Index_methods[] = {
      "Returns the internal DOC_IDs given the external identifiers."},
     {"document", (PyCFunction) Index_document, METH_VARARGS,
      "Return a document (ext_document_id, terms) pair."},
+    {"ext_document_id", (PyCFunction) Index_ext_document_id, METH_VARARGS,
+     "Return a document external identifier pair."},
     {"document_base", (PyCFunction) Index_document_base, METH_NOARGS,
      "Returns the lower bound document identifier (inclusive)."},
     {"maximum_document", (PyCFunction) Index_maximum_document, METH_NOARGS,
@@ -504,6 +539,8 @@ typedef struct {
 static void QueryEnvironment_dealloc(QueryEnvironment* self) {
     Py_DECREF(self->index_);
     self->index_ = NULL;
+
+    self->query_env_->close();
 
     // self->query_env_->close();
     delete self->query_env_;
@@ -713,6 +750,8 @@ static PyObject* QueryEnvironment_run_query(QueryEnvironment* self, PyObject* ar
 
        PyTuple_SetItem(results, pos, result);
     }
+
+    query_results.clear();
 
     return results;
 }
