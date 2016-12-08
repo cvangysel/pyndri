@@ -60,6 +60,30 @@ The token to term identifier mapping can be extracted as follows:
 
     id2tf = index.get_term_frequencies()
 
+Frequently Asked Questions
+--------------------------
+
+### Importing `pyndri` in Python causes the error `Undefined symbol std::__cxx11::basic_string ...`
+
+You are using GCC 5 (or above) and this version of the compiler includes new implementations of common types (`std::string`, etc.). You have to recompile Indri first by setting the `_GLIBCXX_USE_CXX11_ABI` macro to 0.
+
+	make clean
+	./configure CXX="g++ -D_GLIBCXX_USE_CXX11_ABI=0"
+	make
+	sudo make install
+
+Afterwards, recompile pyndri from a clean install.
+
+### Importing `pyndri` in Python causes the error `undefined symbol: std::throw_out_of_range_fmt ...`
+
+Your Python version was compiled with a different standard library than you used to compile Indri and pyndri with. For example, the Anaconda distribution comes with pre-compiled binaries and its own standard library.
+
+We do not provide support for this, as this is a problem with your Python installation and goes beyond the scope of this project. However, we've identified three possible paths:
+
+   * Re-compile Python yourself from source.
+   * Compile Indri and pyndri with the standard library of your Python distribution. This might be difficult, as the headers are often not included in the distribution.
+   * Use the Python executables part of your Linux distribution. Be sure to install the development headers (e.g., `python3.5-dev` using `apt-get` on Ubuntu).
+
 License
 -------
 
