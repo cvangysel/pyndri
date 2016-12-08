@@ -227,6 +227,16 @@ ACT I  PROLOGUE  Two households, both alike in dignity, In fair Verona, where we
             ((3, -5.902633333401366),
              (2, -5.902633333401366)))
 
+    def test_tokenize(self):
+        self.assertEqual(
+            self.index.tokenize('hello world foo bar'),
+            ['hello', 'world', 'foo', 'bar'])
+
+        # Tokenization also applied stemming.
+        self.assertEqual(
+            self.index.tokenize('strategies predictions'),
+            ['strategy', 'prediction'])
+
     def tearDown(self):
         shutil.rmtree(self.test_dir)
         del self.index

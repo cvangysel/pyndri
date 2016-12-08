@@ -1,5 +1,7 @@
-from pyndri.dictionary import *
-from pyndri_ext import *
+from pyndri.dictionary import Dictionary, extract_dictionary
+
+from pyndri_ext import Index as __IndexBase
+from pyndri_ext import QueryEnvironment, stem, tokenize
 
 __all__ = [
     'Index',
@@ -16,7 +18,8 @@ def escape(input):
     return input.translate({
         ord('('): None,
         ord(')'): None,
-        ord('\''): None,  # '"',
+        ord('\''): None,
+        ord('\"'): None,
         ord('.'): ' ',
         ord(':'): ' ',
         ord('\t'): ' ',
@@ -25,4 +28,19 @@ def escape(input):
         ord(','): ' ',
         ord('-'): ' ',
         ord('?'): ' ',
+        ord('+'): ' ',
+        ord(';'): ' ',
+        ord('`'): None,
+        ord('$'): None,
+        ord('<'): ' ',
+        ord('>'): ' ',
     })
+
+
+class Index(__IndexBase):
+
+    def tokenize(self, string):
+        return [
+            self.process_term(token)
+            for token in
+            tokenize(escape(string))]
