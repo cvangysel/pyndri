@@ -101,9 +101,20 @@ ACT I  PROLOGUE  Two households, both alike in dignity, In fair Verona, where we
 
         self.index = pyndri.Index(self.index_path)
 
+    def test_with(self):
+        with pyndri.open(self.index_path) as index:
+            self.assertTrue(isinstance(index, pyndri.Index))
+
+    def test_repr(self):
+        self.assertEqual(
+            repr(self.index),
+            '<pyndri.Index of 3 documents>')
+
     def test_meta(self):
         self.assertEqual(self.index.document_base(), 1)
         self.assertEqual(self.index.maximum_document(), 4)
+
+        self.assertEqual(len(self.index), 3)
 
         self.assertEqual(self.index.path,
                          os.path.join(self.test_dir, 'index'))
