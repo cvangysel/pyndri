@@ -6,14 +6,13 @@ if len(sys.argv) <= 1:
 
     sys.exit(0)
 
-index = pyndri.Index(sys.argv[1])
+with pyndri.open(sys.argv[1]) as index:
+    token2id, id2token, id2df = index.get_dictionary()
+    print(token2id)
+    print(id2token)
 
-token2id, id2token, id2df = index.get_dictionary()
-print(token2id)
-print(id2token)
+    id2tf = index.get_term_frequencies()
 
-id2tf = index.get_term_frequencies()
+    print(len(token2id), len(id2tf))
 
-print(len(token2id), len(id2tf))
-
-print('Index contains %d documents.' % index.document_count())
+    print('Index contains %d documents.' % index.document_count())

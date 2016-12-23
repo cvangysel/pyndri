@@ -7,8 +7,7 @@ if len(sys.argv) <= 2:
 
     sys.exit(0)
 
-index = pyndri.Index(sys.argv[1])
-
-for document_id in range(index.document_base(), index.maximum_document()):
-    if index.document_length(document_id) < int(sys.argv[2]):
-        print(index.document(document_id)[0])
+with pyndri.open(sys.argv[1]) as index:
+    for document_id in range(index.document_base(), index.maximum_document()):
+        if index.document_length(document_id) < int(sys.argv[2]):
+            print(index.document(document_id)[0])
