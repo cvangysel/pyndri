@@ -1,3 +1,4 @@
+from . import compat
 from . import dictionary
 
 from pyndri.dictionary import Dictionary, extract_dictionary
