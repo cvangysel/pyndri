@@ -106,7 +106,14 @@ static int Index_init(Index* self, PyObject* args, PyObject* kwds) {
     self->repository_path_[repository_path_length] = 0;
 
     // Load parameters.
-    self->parameters_->loadFile(indri::file::Path::combine(repository_path, "manifest"));
+    try {
+        self->parameters_->loadFile(
+            indri::file::Path::combine(repository_path, "manifest"));
+    } catch (const lemur::api::Exception& e) {
+        PyErr_SetString(PyExc_IOError, e.what().c_str());
+
+        return -1;
+    }
 
     const std::string collection_path =
         indri::file::Path::combine(repository_path, "collection");
