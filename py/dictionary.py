@@ -1,4 +1,5 @@
 import collections
+import heapq
 import pyndri
 import logging
 
@@ -15,7 +16,7 @@ class Dictionary(object):
     This class is compatible with gensim.
     """
 
-    def __init__(self, token2id, id2token, id2df, krovetz_stemming):
+    def __init__(self, token2id, id2token, id2df, **kwargs):
         assert len(token2id) == len(id2token)
 
         self.token2id = token2id
@@ -23,7 +24,9 @@ class Dictionary(object):
 
         self.dfs = id2df
 
-        self.krovetz_stemming = krovetz_stemming
+        if 'krovetz_stemming' in kwargs:
+            raise NotImplementedError('krovetz_stemming was deprecated '
+                                      'in favour of Index.process_term.')
 
     def __getitem__(self, token_id):
         return self.id2token[token_id]
@@ -47,28 +50,11 @@ class Dictionary(object):
         return 'IndriDictionary({0} unique tokens)'.format(
             len(self.id2token))
 
-    def _process_token(self, token):
-        if self.krovetz_stemming:
-            try:
-                result = pyndri.stem(token)
-            except UnicodeEncodeError as e:
-                logging.error(e)
-
-                result = None
-        else:
-            result = token
-
-        return result
-
     def translate_token(self, token):
-        result = self.token2id.get(self._process_token(token), None)
-
-        return result
+        return self.token2id.get(token, None)
 
     def has_token(self, token):
-        result = self._process_token(token) in self.token2id
-
-        return result
+        return token in self.token2id
 
     def doc2bow(self, document):
         if isinstance(document, str) or isinstance(document, bytes):
@@ -94,10 +80,43 @@ class Dictionary(object):
         return sorted(counter.items())
 
 
-def extract_dictionary(index, **kwargs):
+def extract_dictionary(index,
+                       max_terms=None, make_contiguous=False,
+                       **kwargs):
     assert isinstance(index, pyndri.Index)
 
     logging.debug('Extracting dictionary from index %s.', index)
     token2id, id2token, id2df = index.get_dictionary()
 
-    return Dictionary(token2id, id2token, id2df, **kwargs)
+    if max_terms is not None and max_terms:
+        id2tf = index.get_term_frequencies()
+
+        top_terms_ids = set(heapq.nlargest(
+            max_terms,
+            iterable=id2tf, key=lambda id: id2tf[id]))
+
+        token2id = {key: value for key, value in token2id.items()
+                    if value in top_terms_ids}
+        id2token = {key: value for key, value in id2token.items()
+                    if key in top_terms_ids}
+        id2df = {key: value for key, value in id2df.items()
+                 if key in top_terms_ids}
+
+    if make_contiguous:
+        # Dictionary does not have contiguous identifiers; wrap it.
+        indri_id2cid = {id: cid for cid, id in enumerate(id2token)}
+        id2token = {
+            cid: id2token[id] for id, cid in indri_id2cid.items()}
+        token2id = {
+            token: cid for cid, token in id2token.items()}
+        id2df = {
+            cid: id2df[indri_id] for indri_id, cid in indri_id2cid.items()}
+    else:
+        indri_id2cid = None
+
+    dictionary = Dictionary(token2id, id2token, id2df, **kwargs)
+
+    if make_contiguous:
+        return dictionary, indri_id2cid
+    else:
+        return dictionary

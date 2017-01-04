@@ -106,7 +106,14 @@ static int Index_init(Index* self, PyObject* args, PyObject* kwds) {
     self->repository_path_[repository_path_length] = 0;
 
     // Load parameters.
-    self->parameters_->loadFile(indri::file::Path::combine(repository_path, "manifest"));
+    try {
+        self->parameters_->loadFile(
+            indri::file::Path::combine(repository_path, "manifest"));
+    } catch (const lemur::api::Exception& e) {
+        PyErr_SetString(PyExc_IOError, e.what().c_str());
+
+        return -1;
+    }
 
     const std::string collection_path =
         indri::file::Path::combine(repository_path, "collection");
@@ -311,6 +318,39 @@ static PyObject* Index_document(Index* self, PyObject* args) {
         terms);
 }
 
+static PyObject* Index_ext_document_id(Index* self, PyObject* args) {
+    int int_document_id;
+
+    if (!PyArg_ParseTuple(args, "i", &int_document_id)) {
+        return NULL;
+    }
+
+    if (int_document_id < self->index_->documentBase() ||
+        int_document_id >= self->index_->documentMaximum()) {
+        PyErr_SetString(
+            PyExc_IndexError,
+            "Specified internal document identifier is out of bounds.");
+
+        return NULL;
+    }
+
+    string ext_document_id;
+
+    try {
+        ext_document_id = self->collection_->retrieveMetadatum(
+            int_document_id, "docno");
+    } catch (const lemur::api::Exception& e) {
+        PyErr_SetString(PyExc_IOError, e.what().c_str());
+
+        return NULL;
+    }
+
+    return PyUnicode_Decode(ext_document_id.c_str(),
+                            ext_document_id.size(),
+                            ENCODING,
+                            "strict");
+}
+
 static PyObject* Index_document_base(Index* self) {
     return PyLong_FromLong(self->index_->documentBase());
 }
@@ -461,6 +501,8 @@ static PyMethodDef Index_methods[] = {
      "Returns the internal DOC_IDs given the external identifiers."},
     {"document", (PyCFunction) Index_document, METH_VARARGS,
      "Return a document (ext_document_id, terms) pair."},
+    {"ext_document_id", (PyCFunction) Index_ext_document_id, METH_VARARGS,
+     "Return a document external identifier pair."},
     {"document_base", (PyCFunction) Index_document_base, METH_NOARGS,
      "Returns the lower bound document identifier (inclusive)."},
     {"maximum_document", (PyCFunction) Index_maximum_document, METH_NOARGS,
@@ -505,6 +547,8 @@ static void QueryEnvironment_dealloc(QueryEnvironment* self) {
     Py_DECREF(self->index_);
     self->index_ = NULL;
 
+    self->query_env_->close();
+
     // self->query_env_->close();
     delete self->query_env_;
 }
@@ -524,14 +568,15 @@ static PyObject* QueryEnvironment_new(PyTypeObject* type, PyObject* args, PyObje
 static int QueryEnvironment_init(QueryEnvironment* self, PyObject* args, PyObject* kwds) {
     PyObject* index_obj = NULL;
     PyObject* rules_obj = NULL;
+    PyObject* baseline_obj = NULL;
 
-    static char* kwlist[] = {"index",
-                             "rules",
+    static char* kwlist[] = {"index", "rules", "baseline",
                              NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|O!", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|O!O!", kwlist,
                                      &IndexType, &index_obj,
-                                     &PyTuple_Type, &rules_obj)) {
+                                     &PyTuple_Type, &rules_obj,
+                                     &PyUnicode_Type, &baseline_obj)) {
         return -1;
     }
 
@@ -552,14 +597,21 @@ static int QueryEnvironment_init(QueryEnvironment* self, PyObject* args, PyObjec
 
     Py_DECREF(repostitory_path_obj);
 
-    std::vector<std::string> rules;
+    if (rules_obj != NULL && baseline_obj != NULL) {
+        PyErr_SetString(PyExc_RuntimeError, "Unable to specify smoothing rules for baseline.");
 
-    if (rules_obj != NULL) {
+        return -1;
+    } else if (rules_obj != NULL) {
+        std::vector<std::string> rules;
+
         for (Py_ssize_t i = 0; i < PyTuple_Size(rules_obj); ++i) {
             rules.push_back(PyUnicode_AsUTF8(PyTuple_GetItem(rules_obj, i)));
         }
 
         self->query_env_->setScoringRules(rules);
+    } else if (baseline_obj != NULL) {
+        const std::string baseline = PyUnicode_AsUTF8(baseline_obj);
+        self->query_env_->setBaseline(baseline);
     }
 
     return 0;
@@ -713,6 +765,8 @@ static PyObject* QueryEnvironment_run_query(QueryEnvironment* self, PyObject* ar
 
        PyTuple_SetItem(results, pos, result);
     }
+
+    query_results.clear();
 
     return results;
 }
