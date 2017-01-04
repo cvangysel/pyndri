@@ -60,6 +60,20 @@ The token to term identifier mapping can be extracted as follows:
 
     id2tf = index.get_term_frequencies()
 
+Citation
+--------
+
+If you use pyndri to produce results for your scientific publication, please refer to our [ECIR 2017](https://arxiv.org/abs/1701.00749) paper.
+
+	@inproceedings{VanGysel2017pyndri,
+	  title={Pyndri: a Python Interface to the Indri Search Engine},
+	  author={Van Gysel, Christophe and Kanoulas, Evangelos and de Rijke, Maarten},
+	  booktitle={ECIR},
+	  volume={2017},
+	  year={2017},
+	  organization={Springer}
+	}
+
 Frequently Asked Questions
 --------------------------
 
