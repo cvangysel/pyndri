@@ -65,7 +65,7 @@ static void Index_dealloc(Index* self) {
 
     delete [] self->repository_path_;
 
-    Py_DECREF(self->query_env_obj_);
+    Py_XDECREF(self->query_env_obj_);
     self->query_env_obj_ = NULL;
 }
 
