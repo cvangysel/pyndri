@@ -251,14 +251,23 @@ static PyObject* Index_get_document_ids(Index* self, PyObject* args) {
             return NULL;
         }
 
+        PyObject* py_ext_document_id = PyUnicode_Decode(
+            ext_document_id.c_str(),
+            ext_document_id.size(),
+            ENCODING,
+            "strict");
+
+        PyObject* py_int_document_id = PyLong_FromLong(int_document_id);
+
         PyTuple_SetItem(doc_ids_tuple,
                         pos,
-                        PyTuple_Pack(2,
-                            PyUnicode_Decode(ext_document_id.c_str(),
-                                             ext_document_id.size(),
-                                             ENCODING,
-                                             "strict"),
-                            PyLong_FromLong(int_document_id)));
+                        PyTuple_Pack(
+                            2,
+                            py_ext_document_id,
+                            py_int_document_id));
+
+        Py_DECREF(py_ext_document_id);
+        Py_DECREF(py_int_document_id);
     }
 
     return doc_ids_tuple;
@@ -309,13 +318,18 @@ static PyObject* Index_document(Index* self, PyObject* args) {
 
     delete term_list;
 
-    return PyTuple_Pack(
-        2,
-        PyUnicode_Decode(ext_document_id.c_str(),
-                         ext_document_id.size(),
-                         ENCODING,
-                         "strict"),
-        terms);
+    PyObject* name = PyUnicode_Decode(
+        ext_document_id.c_str(),
+        ext_document_id.size(),
+        ENCODING,
+        "strict");
+
+    PyObject* ret = PyTuple_Pack(2, name, terms);
+
+    Py_DECREF(name);
+    Py_DECREF(terms);
+
+    return ret;
 }
 
 static PyObject* Index_ext_document_id(Index* self, PyObject* args) {
@@ -464,7 +478,13 @@ static PyObject* Index_get_dictionary(Index* self, PyObject* args) {
     CHECK_EQ(PyDict_Size(id2token), self->index_->uniqueTermCount());
     CHECK_EQ(PyDict_Size(id2df), self->index_->uniqueTermCount());
 
-    return PyTuple_Pack(3, token2id, id2token, id2df);
+    PyObject* ret = PyTuple_Pack(3, token2id, id2token, id2df);
+
+    Py_DECREF(token2id);
+    Py_DECREF(id2token);
+    Py_DECREF(id2df);
+
+    return ret;
 }
 
 static PyObject* Index_get_term_frequencies(Index* self, PyObject* args) {
