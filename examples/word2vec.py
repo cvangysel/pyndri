@@ -2,6 +2,7 @@ import copy
 import gensim
 import logging
 import pyndri
+import pyndri.compat
 import sys
 
 logging.basicConfig(level=logging.INFO)

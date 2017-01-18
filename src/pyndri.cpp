@@ -32,6 +32,19 @@ using std::string;
 #define CHECK_GE(first, second) assert(first >= second)
 #define CHECK_NOTNULL(condition) assert(condition != 0)
 
+// Helpers.
+int PyDict_SetItemAndSteal(PyObject* p, PyObject* key, PyObject* val) {
+    CHECK(key != Py_None);
+    CHECK(val != Py_None);
+
+    int ret = PyDict_SetItem(p, key, val);
+
+    Py_XDECREF(key);
+    Py_XDECREF(val);
+
+    return ret;
+}
+
 static PyTypeObject IndexType;
 static PyTypeObject QueryEnvironmentType;
 
@@ -48,8 +61,6 @@ typedef struct {
     indri::index::DiskIndex* index_;
 
     indri::api::QueryEnvironment* query_env_;
-
-    PyObject* query_env_obj_;
 } Index;
 
 static void Index_dealloc(Index* self) {
@@ -64,9 +75,6 @@ static void Index_dealloc(Index* self) {
     delete self->query_env_;
 
     delete [] self->repository_path_;
-
-    Py_DECREF(self->query_env_obj_);
-    self->query_env_obj_ = NULL;
 }
 
 static PyObject* Index_new(PyTypeObject* type, PyObject* args, PyObject* kwds) {
@@ -82,8 +90,6 @@ static PyObject* Index_new(PyTypeObject* type, PyObject* args, PyObject* kwds) {
         self->index_ = new indri::index::DiskIndex;
 
         self->query_env_ = new indri::api::QueryEnvironment;
-
-        self->query_env_obj_ = NULL;
     }
 
     return (PyObject*) self;
@@ -164,13 +170,6 @@ static int Index_init(Index* self, PyObject* args, PyObject* kwds) {
 
         return -1;
     }
-
-    // Construct the default QueryEnvironment.
-    self->query_env_obj_ = PyObject_CallFunction(
-        (PyObject*) &QueryEnvironmentType,
-        "O", self);
-
-    CHECK_NOTNULL(self->query_env_obj_);
 
     return 0;
 }
@@ -425,14 +424,6 @@ static PyObject* Index_document_length(Index* self, PyObject* args) {
     return PyLong_FromLong(self->index_->documentLength(int_document_id));
 }
 
-static PyObject* Index_run_query(Index* self, PyObject* args, PyObject* kwds) {
-    PyObject* query_fn = PyObject_GetAttrString(self->query_env_obj_, "query");
-    PyObject* result = PyObject_Call(query_fn, args, kwds);
-    Py_DECREF(query_fn);
-
-    return result;
-}
-
 static PyObject* Index_get_dictionary(Index* self, PyObject* args) {
     indri::index::VocabularyIterator* const vocabulary_it = self->index_->vocabularyIterator();
 
@@ -451,23 +442,26 @@ static PyObject* Index_get_dictionary(Index* self, PyObject* args) {
         const unsigned int document_frequency = term_data->termData->corpus.documentCount;
         CHECK_GT(document_frequency, 0);
 
-        PyDict_SetItem(token2id,
-                       PyUnicode_Decode(term.c_str(),
-                                        term.size(),
-                                        ENCODING,
-                                        "strict"),
-                       PyLong_FromLong(term_id));
+        PyDict_SetItemAndSteal(
+            token2id,
+            PyUnicode_Decode(term.c_str(),
+                             term.size(),
+                             ENCODING,
+                             "strict"),
+            PyLong_FromLong(term_id));
 
-        PyDict_SetItem(id2token,
-                       PyLong_FromLong(term_id),
-                       PyUnicode_Decode(term.c_str(),
-                                        term.size(),
-                                        ENCODING,
-                                        "strict"));
+        PyDict_SetItemAndSteal(
+            id2token,
+            PyLong_FromLong(term_id),
+            PyUnicode_Decode(term.c_str(),
+                             term.size(),
+                             ENCODING,
+                             "strict"));
 
-        PyDict_SetItem(id2df,
-                       PyLong_FromLong(term_id),
-                       PyLong_FromLong(document_frequency));
+        PyDict_SetItemAndSteal(
+            id2df,
+            PyLong_FromLong(term_id),
+            PyLong_FromLong(document_frequency));
 
         vocabulary_it->nextEntry();
     }
@@ -502,9 +496,9 @@ static PyObject* Index_get_term_frequencies(Index* self, PyObject* args) {
         const uint64_t term_frequency = term_data->termData->corpus.totalCount;
         CHECK_GT(term_frequency, 0);
 
-        PyDict_SetItem(id2tf,
-                       PyLong_FromLong(term_id),
-                       PyLong_FromLong(term_frequency));
+        PyDict_SetItemAndSteal(id2tf,
+                               PyLong_FromLong(term_id),
+                               PyLong_FromLong(term_frequency));
 
         vocabulary_it->nextEntry();
     }
@@ -543,9 +537,6 @@ static PyMethodDef Index_methods[] = {
 
     {"process_term", (PyCFunction) Index_process_term, METH_VARARGS,
      "Pre-processes an index term."},
-
-    {"query", (PyCFunction) Index_run_query, METH_VARARGS | METH_KEYWORDS,
-     "Queries an Indri index."},
 
     {"get_dictionary", (PyCFunction) Index_get_dictionary, METH_NOARGS,
      "Extracts the dictionary from the index."},

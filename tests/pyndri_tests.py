@@ -1,14 +1,31 @@
+import gc
 import operator
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
 import pyndri
 
 
-class ParsingTest(unittest.TestCase):
+class PyndriTest(unittest.TestCase):
+
+    def setUp(self):
+        if hasattr(sys, 'gettotalrefcount'):
+            gc.collect()
+            self.ref_count_before_test = sys.gettotalrefcount()
+
+    def tearDown(self):
+        # For debugging purposes.
+        if hasattr(sys, 'gettotalrefcount'):
+            gc.collect()
+            print(self._testMethodName,
+                  sys.gettotalrefcount() - self.ref_count_before_test)
+
+
+class ParsingTest(PyndriTest):
 
     def test_stemming(self):
         self.assertEqual(pyndri.stem('predictions'), 'prediction')
@@ -47,7 +64,7 @@ class ParsingTest(unittest.TestCase):
                          ('hello', 'world',))
 
 
-class IndriTest(unittest.TestCase):
+class IndriTest(PyndriTest):
 
     CORPUS = """<DOC>
 <DOCNO>lorem</DOCNO>
@@ -78,6 +95,8 @@ ACT I  PROLOGUE  Two households, both alike in dignity, In fair Verona, where we
 </parameters>"""
 
     def setUp(self):
+        super(IndriTest, self).setUp()
+
         self.test_dir = tempfile.mkdtemp()
 
         with open(os.path.join(self.test_dir,
@@ -100,6 +119,9 @@ ACT I  PROLOGUE  Two households, both alike in dignity, In fair Verona, where we
         self.assertTrue(os.path.exists(self.index_path))
 
         self.index = pyndri.Index(self.index_path)
+
+    def test_1empty(self):
+        pass  # Empty test to verify reference counting.
 
     def test_with(self):
         with pyndri.open(self.index_path) as index:
@@ -275,6 +297,9 @@ ACT I  PROLOGUE  Two households, both alike in dignity, In fair Verona, where we
     def tearDown(self):
         shutil.rmtree(self.test_dir)
         del self.index
+        self.index = None
+
+        super(IndriTest, self).tearDown()
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,6 +1,3 @@
-from . import compat
-from . import dictionary
-
 from pyndri.dictionary import Dictionary, extract_dictionary
 
 from pyndri_ext import Index as __IndexBase
@@ -45,6 +42,17 @@ def escape(input):
 
 class Index(__IndexBase):
 
+    def __init__(self, *args, **kwargs):
+        super(Index, self).__init__(*args, **kwargs)
+
+        self.__default_query_env = QueryEnvironment(self)
+
+    def query(self, *args, **kwargs):
+        assert self.__default_query_env is not None, \
+            'Index has been closed.'
+
+        return self.__default_query_env.query(*args, **kwargs)
+
     def tokenize(self, string):
         return [
             self.process_term(token)
@@ -56,6 +64,13 @@ class Index(__IndexBase):
 
     def __repr__(self):
         return '<pyndri.Index of {} documents>'.format(len(self))
+
+    def close(self):
+        assert self.__default_query_env is not None, \
+            'Index has been closed.'
+
+        del self.__default_query_env
+        self.__default_query_env = None
 
 
 class __IndexOpener(object):
@@ -73,6 +88,8 @@ class __IndexOpener(object):
         return self.index
 
     def __exit__(self, type, value, traceback):
+        self.index.close()
+
         del self.index
         self.index = None
 
