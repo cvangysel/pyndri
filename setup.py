@@ -21,4 +21,13 @@ setup(name='pyndri',
       package_dir={'pyndri': 'py'},
       url='https://github.com/cvangysel/pyndri',
       download_url='https://github.com/cvangysel/pyndri/tarball/0.1',
-      keywords=['indri', 'language models', 'retrieval', 'indexing'])
+      keywords=['indri', 'language models', 'retrieval', 'indexing'],
+      classifiers=[
+          'Development Status :: 3 - Alpha',
+          'License :: OSI Approved :: MIT License',
+          'Programming Language :: Python',
+          'Programming Language :: C++',
+          'Intended Audience :: Science/Research',
+          'Operating System :: POSIX :: Linux',
+          'Topic :: Text Processing :: Indexing',
+      ])
