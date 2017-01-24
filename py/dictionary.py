@@ -38,7 +38,7 @@ class Dictionary(object):
         return self.iterkeys()
 
     def keys(self):
-        return self.keys()
+        return self.iterkeys()
 
     def iterkeys(self):
         return self.id2token.keys()
