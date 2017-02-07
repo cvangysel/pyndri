@@ -7,6 +7,7 @@ pyndri_ext = Extension(
     libraries=['indri', 'z', 'pthread', 'm'],
     library_dirs=list(
         filter(len, os.environ.get('LD_LIBRARY_PATH', '').split(':'))),
+    include_dirs=[os.environ.get('INDRI_INCLUDE_PATH', '')],
     define_macros=[('_GLIBCXX_USE_CXX11_ABI', '0'),
                    ('P_NEEDS_GNU_CXX_NAMESPACE', '1')],
     undef_macros=['NDEBUG'])

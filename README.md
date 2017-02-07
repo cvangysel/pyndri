@@ -74,6 +74,17 @@ If you use pyndri to produce results for your scientific publication, please ref
 	  organization={Springer}
 	}
 
+Installation
+------------
+
+Install indri 5.10
+
+python setup.py install
+
+If indri is installed locally, you can (1) update setup.py or (2) update the enviroment variable: LD_LIBRARY_PATH and
+export INDRI_INCLUDE_PATH which is set to the location of header files in the indri installation directory.
+
+
 Frequently Asked Questions
 --------------------------
 
