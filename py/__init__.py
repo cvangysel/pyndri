@@ -53,6 +53,18 @@ class Index(__IndexBase):
 
         return self.__default_query_env.query(*args, **kwargs)
 
+    def document_expression_count(self, *args, **kwargs):
+    	 assert self.__default_query_env is not None, \
+    	 		 'Index has been closed.'
+
+    	 return self.__default_query_env.document_expression_count(*args, **kwargs)
+
+    def expression_count(self, *args, **kwargs):
+    	 assert self.__default_query_env is not None, \
+    	 		 'Index has been closed.'
+
+    	 return self.__default_query_env.expression_count(*args, **kwargs)
+
     def tokenize(self, string):
         return [
             self.process_term(token)

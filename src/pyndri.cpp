@@ -641,6 +641,26 @@ static int QueryEnvironment_init(QueryEnvironment* self, PyObject* args, PyObjec
     return 0;
 }
 
+static PyObject* QueryEnvironment_document_expression_count( QueryEnvironment* self, PyObject* args ) {
+  char* term_object;
+  
+  if (!PyArg_ParseTuple(args, "s", &term_object)) {
+	 return NULL;
+  }
+
+  return PyLong_FromLong(self->query_env_->documentExpressionCount( term_object ));
+}
+
+static PyObject* QueryEnvironment_expression_count( QueryEnvironment* self, PyObject* args, PyObject* kwds ) {
+  char* term_object;
+  
+  if (!PyArg_ParseTuple(args, "s", &term_object)) {
+	 return NULL;
+  }
+
+  return PyLong_FromLong(self->query_env_->expressionCount( term_object ));
+}
+
 static PyObject* QueryEnvironment_run_query(QueryEnvironment* self, PyObject* args, PyObject* kwds) {
     PyObject* query = NULL;
     PyObject* document_set = NULL;
@@ -802,6 +822,10 @@ static PyMemberDef QueryEnvironment_members[] = {
 static PyMethodDef QueryEnvironment_methods[] = {
     {"query", (PyCFunction) QueryEnvironment_run_query, METH_VARARGS | METH_KEYWORDS,
      "Queries an Indri index."},
+    {"document_expression_count", (PyCFunction) QueryEnvironment_document_expression_count, METH_VARARGS,
+     "Document count of occurrences of an Indri expression."},
+    {"expression_count", (PyCFunction) QueryEnvironment_expression_count, METH_VARARGS,
+     "Term count of occurrences of an Indri expression."},
 
     {NULL}  /* Sentinel */
 };
