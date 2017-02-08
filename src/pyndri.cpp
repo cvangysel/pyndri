@@ -372,8 +372,19 @@ static PyObject* Index_maximum_document(Index* self) {
     return PyLong_FromLong(self->index_->documentMaximum());
 }
 
-static PyObject* Index_document_count(Index* self) {
+static PyObject* Index_total_document(Index* self) {
     return PyLong_FromLong(self->index_->documentCount());
+}
+
+static PyObject* Index_document_count(Index* self, PyObject* args) {
+
+    char* term_object;
+
+    if (!PyArg_ParseTuple(args, "s", &term_object)) {
+        return NULL;
+    }
+
+    return PyLong_FromLong(self->index_->documentCount(term_object));
 }
 
 static PyObject* Index_total_terms(Index* self) {
@@ -522,7 +533,7 @@ static PyMethodDef Index_methods[] = {
     {"maximum_document", (PyCFunction) Index_maximum_document, METH_NOARGS,
      "Returns the upper bound document identifier (exclusive)."},
 
-    {"document_count", (PyCFunction) Index_document_count, METH_NOARGS,
+    {"total_count", (PyCFunction) Index_total_document, METH_NOARGS,
      "Returns the number of documents in the index."},
     {"document_length", (PyCFunction) Index_document_length, METH_VARARGS,
      "Returns the length of a document."},
@@ -532,6 +543,8 @@ static PyMethodDef Index_methods[] = {
     {"unique_terms", (PyCFunction) Index_unique_terms, METH_NOARGS,
      "Returns the number of unique terms in the index."},
 
+    {"document_count", (PyCFunction) Index_document_count, METH_VARARGS,
+     "Returns the document frequency for a term."},
     {"term_count", (PyCFunction) Index_term_count, METH_VARARGS,
      "Return the term frequency for a term."},
 
