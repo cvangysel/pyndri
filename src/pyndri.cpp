@@ -4,6 +4,7 @@
 #include <cassert>
 #include <string>
 #include <iostream>
+#include <sstream>
 
 #include <antlr/NoViableAltException.hpp>
 #include <antlr/MismatchedTokenException.hpp>
