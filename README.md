@@ -10,6 +10,54 @@ During development, we use Python 3.5. Some of the [examples](examples) require 
 
 **NOTE**: Python2 support has ended; if you want to continue using it, please check out the  `python2` tag.
 
+Installation
+------------
+
+You first need to install [Indri](https://www.lemurproject.org/indri.php) before you can install pyndri.
+
+### Linux
+
+While there are many different Linux distributions, the following seems to work for most. Below we assume a Debian-based system (tested on Ubuntu and Mint), however, [your mileage may vary](https://en.wiktionary.org/wiki/your_mileage_may_vary).
+
+First, install dependencies:
+
+    sudo apt install g++ zlib1g-dev python3.5-dev python3-pip
+    sudo pip3 install setuptools
+
+To install Indri:
+
+    wget <url-to-indri-5.11.tar.gz>
+    tar xzvf indri-5.11.tar.gz
+    cd indri-5.11
+    ./configure CXX="g++ -D_GLIBCXX_USE_CXX11_ABI=0"
+    make
+    sudo make install
+
+Finally, install pyndri:
+
+    sudo pip3 install pyndri
+
+### macOS
+
+The instructions for macOS as similar to those for Linux. You most likely want to install a modern version of Python, GCC and the development package of zlib using [Homebrew](https://brew.sh/) or [MacPorts](https://www.macports.org/).
+
+### Windows + [Cygwin](https://www.cygwin.com/) (experimental)
+
+To get Indri running under Windows with Cygwin, a small adjustment needs to be made to the above instructions. First, you probably want to install the [apt-cyg](https://github.com/transcode-open/apt-cyg) package manager and install a modern version of Python, GCC and the zlib development package.
+
+To install Indri:
+
+    wget <url-to-indri-5.11.tar.gz>
+    tar xzvf indri-5.11.tar.gz
+    cd indri-5.11
+    ./configure CXX="g++ -D_GNU_SOURCE=1 -D_GLIBCXX_USE_CXX11_ABI=0"
+    make
+    sudo make install
+
+Finally, install pyndri:
+
+    sudo pip install pyndri
+
 Examples
 --------
 
