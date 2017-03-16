@@ -384,7 +384,7 @@ static PyObject* Index_document_count(Index* self, PyObject* args) {
         return NULL;
     }
 
-    return PyLong_FromLong(self->index_->documentCount(term_object));
+    return PyLong_FromLong(self->query_env_->documentCount(term_object));
 }
 
 static PyObject* Index_total_terms(Index* self) {
