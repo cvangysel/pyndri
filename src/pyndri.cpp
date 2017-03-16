@@ -402,7 +402,7 @@ static PyObject* Index_term_count(Index* self, PyObject* args) {
         return NULL;
     }
 
-    return PyLong_FromLong(self->index_->termCount(term_object));
+    return PyLong_FromLong(self->query_env_->termCount(term_object));
 }
 
 static PyObject* Index_process_term(Index* self, PyObject* args) {
