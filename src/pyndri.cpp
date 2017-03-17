@@ -272,7 +272,7 @@ static PyObject* Index_get_document_ids(Index* self, PyObject* args) {
     return doc_ids_tuple;
 }
 
-static PyObject* Index_document(Index* self, PyObject* args) {
+static PyObject* Index_document_term_ids(Index *self, PyObject *args) {
     int int_document_id;
 
     if (!PyArg_ParseTuple(args, "i", &int_document_id)) {
@@ -282,8 +282,8 @@ static PyObject* Index_document(Index* self, PyObject* args) {
     if (int_document_id < self->index_->documentBase() ||
         int_document_id >= self->index_->documentMaximum()) {
         PyErr_SetString(
-            PyExc_IndexError,
-            "Specified internal document identifier is out of bounds.");
+                PyExc_IndexError,
+                "Specified internal document identifier is out of bounds.");
 
         return NULL;
     }
@@ -293,7 +293,7 @@ static PyObject* Index_document(Index* self, PyObject* args) {
 
     try {
         ext_document_id = self->collection_->retrieveMetadatum(
-            int_document_id, "docno");
+                int_document_id, "docno");
         term_list = self->index_->termList(int_document_id);
     } catch (const lemur::api::Exception& e) {
         PyErr_SetString(PyExc_IOError, e.what().c_str());
@@ -308,27 +308,20 @@ static PyObject* Index_document(Index* self, PyObject* args) {
     PyObject* terms = PyTuple_New(term_list->terms().size());
 
     indri::utility::greedy_vector<lemur::api::TERMID_T>::const_iterator term_it =
-        term_list->terms().begin();
+            term_list->terms().begin();
 
     Py_ssize_t pos = 0;
     for (; term_it != term_list->terms().end(); ++term_it, ++pos) {
-    	 
-		 std::string term_ = self->index_->term(*term_it);
-
-    	 
-        PyTuple_SetItem(terms, pos, PyUnicode_Decode(term_.c_str(),
-                        term_.size(),
-                        ENCODING,
-                        "strict"));
+        PyTuple_SetItem(terms, pos, PyLong_FromLong(*term_it));
     }
 
     delete term_list;
 
     PyObject* name = PyUnicode_Decode(
-        ext_document_id.c_str(),
-        ext_document_id.size(),
-        ENCODING,
-        "strict");
+            ext_document_id.c_str(),
+            ext_document_id.size(),
+            ENCODING,
+            "strict");
 
     PyObject* ret = PyTuple_Pack(2, name, terms);
 
@@ -336,6 +329,98 @@ static PyObject* Index_document(Index* self, PyObject* args) {
     Py_DECREF(terms);
 
     return ret;
+
+}
+
+static PyObject* Index_document_terms(Index *self, PyObject *args) {
+    int int_document_id;
+
+    if (!PyArg_ParseTuple(args, "i", &int_document_id)) {
+        return NULL;
+    }
+
+    if (int_document_id < self->index_->documentBase() ||
+        int_document_id >= self->index_->documentMaximum()) {
+        PyErr_SetString(
+                PyExc_IndexError,
+                "Specified internal document identifier is out of bounds.");
+
+        return NULL;
+    }
+
+    string ext_document_id;
+    const indri::index::TermList* term_list = 0;
+
+    try {
+        ext_document_id = self->collection_->retrieveMetadatum(
+                int_document_id, "docno");
+        term_list = self->index_->termList(int_document_id);
+    } catch (const lemur::api::Exception& e) {
+        PyErr_SetString(PyExc_IOError, e.what().c_str());
+
+        if (term_list != 0) {
+            delete term_list;
+        }
+
+        return NULL;
+    }
+
+    PyObject* terms = PyTuple_New(term_list->terms().size());
+
+    indri::utility::greedy_vector<lemur::api::TERMID_T>::const_iterator term_it =
+            term_list->terms().begin();
+
+    Py_ssize_t pos = 0;
+    for (; term_it != term_list->terms().end(); ++term_it, ++pos) {
+
+        std::string term_ = self->index_->term(*term_it);
+
+
+        PyTuple_SetItem(terms, pos, PyUnicode_Decode(term_.c_str(),
+                                                     term_.size(),
+                                                     ENCODING,
+                                                     "strict"));
+    }
+
+    delete term_list;
+
+    PyObject* name = PyUnicode_Decode(
+            ext_document_id.c_str(),
+            ext_document_id.size(),
+            ENCODING,
+            "strict");
+
+    PyObject* ret = PyTuple_Pack(2, name, terms);
+
+    Py_DECREF(name);
+    Py_DECREF(terms);
+
+    return ret;
+}
+
+static PyObject* Index_term(Index *self, PyObject *args) {
+    int int_term_id;
+
+    if (!PyArg_ParseTuple(args, "i", &int_term_id)) {
+        return NULL;
+    }
+
+    if (int_term_id < 0 ||
+        int_term_id >= self->index_->termCount()) {
+        PyErr_SetString(
+                PyExc_IndexError,
+                "Specified internal term identifier is out of bounds.");
+        return NULL;
+    }
+
+    std::string term_ = self->index_->term(int_term_id);
+
+    return PyUnicode_Decode (
+                term_.c_str(),
+                term_.size(),
+                ENCODING,
+                "strict");
+
 }
 
 static PyObject* Index_document_text(Index* self, PyObject* args) {
@@ -564,8 +649,10 @@ static PyObject* Index_get_term_frequencies(Index* self, PyObject* args) {
 static PyMethodDef Index_methods[] = {
     {"document_ids", (PyCFunction) Index_get_document_ids, METH_VARARGS,
      "Returns the internal DOC_IDs given the external identifiers."},
-    {"document", (PyCFunction) Index_document, METH_VARARGS,
-     "Return a document (ext_document_id, terms) pair."},
+    {"document_term_ids", (PyCFunction) Index_document_term_ids, METH_VARARGS,
+     "Return a document (ext_document_id, term_ids) pair."},
+    {"document_terms", (PyCFunction) Index_document_terms, METH_VARARGS,
+            "Return a document (ext_document_id, terms) pair."},
     {"document_text", (PyCFunction) Index_document_text, METH_VARARGS,
      "Return a document text."},
     {"ext_document_id", (PyCFunction) Index_ext_document_id, METH_VARARGS,
@@ -592,6 +679,8 @@ static PyMethodDef Index_methods[] = {
 
     {"process_term", (PyCFunction) Index_process_term, METH_VARARGS,
      "Pre-processes an index term."},
+    {"term", (PyCFunction) Index_term, METH_VARARGS,
+            "return term given term ID."},
 
     {"get_dictionary", (PyCFunction) Index_get_dictionary, METH_NOARGS,
      "Extracts the dictionary from the index."},
