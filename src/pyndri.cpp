@@ -312,7 +312,14 @@ static PyObject* Index_document(Index* self, PyObject* args) {
 
     Py_ssize_t pos = 0;
     for (; term_it != term_list->terms().end(); ++term_it, ++pos) {
-        PyTuple_SetItem(terms, pos, PyLong_FromLong(*term_it));
+    	 
+		 std::string term_ = self->index_->term(*term_it);
+
+    	 
+        PyTuple_SetItem(terms, pos, PyUnicode_Decode(term_.c_str(),
+                        term_.size(),
+                        ENCODING,
+                        "strict"));
     }
 
     delete term_list;
