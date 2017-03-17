@@ -338,6 +338,39 @@ static PyObject* Index_document(Index* self, PyObject* args) {
     return ret;
 }
 
+static PyObject* Index_document_text(Index* self, PyObject* args) {
+    int int_document_id;
+
+    if (!PyArg_ParseTuple(args, "i", &int_document_id)) {
+        return NULL;
+    }
+
+    if (int_document_id < self->index_->documentBase() ||
+        int_document_id >= self->index_->documentMaximum()) {
+        PyErr_SetString(
+            PyExc_IndexError,
+            "Specified internal document identifier is out of bounds.");
+
+        return NULL;
+    }
+
+    string document_text;
+
+    try {
+        document_text = self->collection_->retrieve(
+            int_document_id)->text;
+    } catch (const lemur::api::Exception& e) {
+        PyErr_SetString(PyExc_IOError, e.what().c_str());
+
+        return NULL;
+    }
+
+    return PyUnicode_Decode(document_text.c_str(),
+                            document_text.size(),
+                            ENCODING,
+                            "strict");
+}
+
 static PyObject* Index_ext_document_id(Index* self, PyObject* args) {
     int int_document_id;
 
@@ -533,6 +566,8 @@ static PyMethodDef Index_methods[] = {
      "Returns the internal DOC_IDs given the external identifiers."},
     {"document", (PyCFunction) Index_document, METH_VARARGS,
      "Return a document (ext_document_id, terms) pair."},
+    {"document_text", (PyCFunction) Index_document_text, METH_VARARGS,
+     "Return a document text."},
     {"ext_document_id", (PyCFunction) Index_ext_document_id, METH_VARARGS,
      "Return a document external identifier pair."},
     {"document_base", (PyCFunction) Index_document_base, METH_NOARGS,
