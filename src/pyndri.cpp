@@ -530,6 +530,49 @@ static PyObject* Index_term_count(Index* self, PyObject* args) {
     return PyLong_FromLong(self->query_env_->termCount(term_object));
 }
 
+
+string get_ext_document_id(Index* self, lemur::api::DOCID_T int_document_id){
+    string ext_document_id;
+
+    try {
+    ext_document_id = self->collection_->retrieveMetadatum(
+        int_document_id, "docno");
+    } catch (const lemur::api::Exception& e) {
+        PyErr_SetString(PyExc_IOError, e.what().c_str());
+
+        return NULL;
+    }
+
+    return ext_document_id;
+}
+
+static PyObject* Index_expression_list( Index* self, PyObject* args ) {
+
+    char* expression_object;
+
+    if (!PyArg_ParseTuple(args, "s", &expression_object)) {
+        return NULL;
+    }
+
+    std::vector<indri::api::ScoredExtentResult> result = self->query_env_->expressionList( expression_object );
+
+
+    map<string, int> results_dict;
+    for( size_t i=0; i<result.size(); i++ ) {
+        string ext_document_id = get_ext_document_id(self, result[i].document);
+        results_dict[ext_document_id]++;
+    }
+    PyObject *PDict_results = PyDict_New();
+    for( map<string, int>::iterator it = results_dict.begin(); it != results_dict.end(); it++ ) {
+        PyDict_SetItemAndSteal(PDict_results, PyUnicode_Decode(it->first.c_str(),
+                                                               it->first.size(),
+                                                               ENCODING,
+                                                               "strict"), PyLong_FromLong(it->second));
+    }
+
+    return PDict_results;
+}
+
 static PyObject* Index_process_term(Index* self, PyObject* args) {
     char* term_object;
 
@@ -677,10 +720,12 @@ static PyMethodDef Index_methods[] = {
     {"term_count", (PyCFunction) Index_term_count, METH_VARARGS,
      "Return the term frequency for a term."},
 
+    {"expression_list", (PyCFunction) Index_expression_list, METH_VARARGS,
+     "returns documents contain an expression."},
     {"process_term", (PyCFunction) Index_process_term, METH_VARARGS,
      "Pre-processes an index term."},
     {"term", (PyCFunction) Index_term, METH_VARARGS,
-            "return term given term ID."},
+            "returns term given term ID."},
 
     {"get_dictionary", (PyCFunction) Index_get_dictionary, METH_NOARGS,
      "Extracts the dictionary from the index."},
