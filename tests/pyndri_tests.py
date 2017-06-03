@@ -237,6 +237,10 @@ ACT I  PROLOGUE  Two households, both alike in dignity, In fair Verona, where we
         self.assertEqual(ext_doc_ids,
                          ['lorem', 'hamlet', 'romeo'])
 
+    def test_ext_document_id(self):
+        self.assertEqual(self.index.ext_document_id(1), "lorem")
+        self.assertEqual(self.index.ext_document_id(2), "hamlet")
+
     def test_query_environment(self):
         env = pyndri.QueryEnvironment(
             self.index,
