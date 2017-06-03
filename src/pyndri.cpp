@@ -205,14 +205,14 @@ static PyObject* Index_get_document_ids(Index* self, PyObject* args) {
 
     std::vector<std::string> ext_document_ids;
 
-    while (item = PyIter_Next(iterator)) {
+    while ((item = PyIter_Next(iterator))) {
         CHECK(PyUnicode_CheckExact(item));
 
         PyObject* item_bytes = PyUnicode_AsEncodedString(item, ENCODING, "strict");
         char* const ext_document_id = PyBytes_AsString(item_bytes);
 
-        // Create a copy of the string.
-        ext_document_ids.push_back(ext_document_id);
+        // Create a copy of the string.p
+        ext_document_ids.push_back((string)ext_document_id);
 
         Py_DECREF(item_bytes);
         Py_DECREF(item);
@@ -603,7 +603,7 @@ static PyObject* Index_document_length(Index* self, PyObject* args) {
     return PyLong_FromLong(self->index_->documentLength(int_document_id));
 }
 
-static PyObject* Index_get_dictionary(Index* self, PyObject* args) {
+static PyObject* Index_get_dictionary(Index* self, PyObject* ) {
     indri::index::VocabularyIterator* const vocabulary_it = self->index_->vocabularyIterator();
 
     PyObject* const token2id = PyDict_New();
@@ -824,7 +824,7 @@ static PyObject* QueryEnvironment_document_expression_count( QueryEnvironment* s
 	 return NULL;
   }
 
-  return PyLong_FromLong(self->query_env_->documentExpressionCount( term_object ));
+  return PyLong_FromDouble(self->query_env_->documentExpressionCount( term_object ));
 }
 
 static PyObject* QueryEnvironment_expression_count( QueryEnvironment* self, PyObject* args, PyObject* kwds ) {
@@ -834,7 +834,7 @@ static PyObject* QueryEnvironment_expression_count( QueryEnvironment* self, PyOb
 	 return NULL;
   }
 
-  return PyLong_FromLong(self->query_env_->expressionCount( term_object ));
+  return PyLong_FromDouble(self->query_env_->expressionCount( term_object ));
 }
 
 static PyObject* QueryEnvironment_run_query(QueryEnvironment* self, PyObject* args, PyObject* kwds) {
@@ -881,10 +881,10 @@ static PyObject* QueryEnvironment_run_query(QueryEnvironment* self, PyObject* ar
             return NULL;
         }
 
-        while (item = PyIter_Next(iterator)) {
+        while ((item = PyIter_Next(iterator))) {
             CHECK(PyLong_CheckExact(item));
 
-            const lemur::api::DOCID_T int_doc_id = PyLong_AsLong(item);
+            const lemur::api::DOCID_T int_doc_id = (lemur::api::DOCID_T)PyLong_AsLong(item);
             if (int_doc_id < 0) {
                 continue;
             }
