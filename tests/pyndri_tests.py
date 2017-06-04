@@ -202,6 +202,8 @@ ACT I  PROLOGUE  Two households, both alike in dignity, In fair Verona, where we
         self.assertEqual(expression_list_, {'lorem': 1})
         expression_list_ = self.index.expression_list("#od1(your)")
         self.assertEqual(expression_list_, {'hamlet': 1, 'romeo': 3})
+        expression_list_ = self.index.expression_list("your")
+        self.assertEqual(expression_list_, {'hamlet': 1, 'romeo': 3})
 
     def test_document_terms(self):
         first_id, first_tokens = self.index.document_terms(1)
