@@ -185,6 +185,11 @@ ACT I  PROLOGUE  Two households, both alike in dignity, In fair Verona, where we
         self.assertEqual(self.index.document_length(2), 71)
         self.assertEqual(self.index.document_length(3), 573)
 
+    def test_document_length_doc_name(self):
+        self.assertEqual(self.index.document_length_doc_name("lorem"), 88)
+        self.assertEqual(self.index.document_length_doc_name("hamlet"), 71)
+        self.assertEqual(self.index.document_length_doc_name("romeo"), 573)
+
     def test_raw_dictionary(self):
         token2id, id2token, id2df = self.index.get_dictionary()
         id2tf = self.index.get_term_frequencies()

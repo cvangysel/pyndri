@@ -98,7 +98,7 @@ static PyObject *Index_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
 static int Index_init(Index *self, PyObject *args, PyObject *kwds) {
     const char *repository_path = NULL;
 
-    static char *kwlist[] = {(char*)"repository_path", NULL};
+    static char *kwlist[] = {(char *) "repository_path", NULL};
 
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "s", kwlist,
                                      &repository_path)) {
@@ -593,6 +593,27 @@ static PyObject *Index_process_term(Index *self, PyObject *args) {
                             "strict");
 }
 
+static PyObject *Index_document_length_doc_name(Index *self, PyObject *args) {
+    char* ext_document_id;
+
+    if (!PyArg_ParseTuple(args, "s", &ext_document_id)) {
+        return NULL;
+    }
+    std::vector<lemur::api::DOCID_T> documentIDs;
+    documentIDs = self->collection_->retrieveIDByMetadatum("docno", ext_document_id);
+
+    if (documentIDs.size() < 1)
+        PyErr_SetString(PyExc_RuntimeError, "No document found with given docno");
+
+    if (documentIDs.size() > 1)
+        PyErr_SetString(PyExc_RuntimeError, "More than one document found with given docno");
+
+    lemur::api::DOCID_T int_document_id = documentIDs.front();
+
+    return PyLong_FromLong(self->index_->documentLength(int_document_id));
+
+}
+
 static PyObject *Index_document_length(Index *self, PyObject *args) {
     int int_document_id;
 
@@ -690,46 +711,48 @@ static PyObject *Index_get_term_frequencies(Index *self, PyObject *) {
 }
 
 static PyMethodDef Index_methods[] = {
-        {"document_ids",         (PyCFunction) Index_get_document_ids,     METH_VARARGS,
+        {"document_ids",             (PyCFunction) Index_get_document_ids,         METH_VARARGS,
                 "Returns the internal DOC_IDs given the external identifiers."},
-        {"document_term_ids",    (PyCFunction) Index_document_term_ids,    METH_VARARGS,
+        {"document_term_ids",        (PyCFunction) Index_document_term_ids,        METH_VARARGS,
                 "Return a document (ext_document_id, term_ids) pair."},
-        {"document_terms",       (PyCFunction) Index_document_terms,       METH_VARARGS,
+        {"document_terms",           (PyCFunction) Index_document_terms,           METH_VARARGS,
                 "Return a document (ext_document_id, terms) pair."},
-        {"document_text",        (PyCFunction) Index_document_text,        METH_VARARGS,
+        {"document_text",            (PyCFunction) Index_document_text,            METH_VARARGS,
                 "Return a document text."},
-        {"ext_document_id",      (PyCFunction) Index_ext_document_id,      METH_VARARGS,
+        {"ext_document_id",          (PyCFunction) Index_ext_document_id,          METH_VARARGS,
                 "Return a document external identifier pair."},
-        {"document_base",        (PyCFunction) Index_document_base,        METH_NOARGS,
+        {"document_base",            (PyCFunction) Index_document_base,            METH_NOARGS,
                 "Returns the lower bound document identifier (inclusive)."},
-        {"maximum_document",     (PyCFunction) Index_maximum_document,     METH_NOARGS,
+        {"maximum_document",         (PyCFunction) Index_maximum_document,         METH_NOARGS,
                 "Returns the upper bound document identifier (exclusive)."},
 
-        {"total_count",          (PyCFunction) Index_total_document,       METH_NOARGS,
+        {"total_count",              (PyCFunction) Index_total_document,           METH_NOARGS,
                 "Returns the number of documents in the index."},
-        {"document_length",      (PyCFunction) Index_document_length,      METH_VARARGS,
+        {"document_length",          (PyCFunction) Index_document_length,          METH_VARARGS,
                 "Returns the length of a document."},
+        {"document_length_doc_name", (PyCFunction) Index_document_length_doc_name, METH_VARARGS,
+                "Returns the length of a document given its document name."},
 
-        {"total_terms",          (PyCFunction) Index_total_terms,          METH_NOARGS,
+        {"total_terms",              (PyCFunction) Index_total_terms,              METH_NOARGS,
                 "Returns the number of total terms in the index."},
-        {"unique_terms",         (PyCFunction) Index_unique_terms,         METH_NOARGS,
+        {"unique_terms",             (PyCFunction) Index_unique_terms,             METH_NOARGS,
                 "Returns the number of unique terms in the index."},
 
-        {"document_count",       (PyCFunction) Index_document_count,       METH_VARARGS,
+        {"document_count",           (PyCFunction) Index_document_count,           METH_VARARGS,
                 "Returns the document frequency for a term."},
-        {"term_count",           (PyCFunction) Index_term_count,           METH_VARARGS,
+        {"term_count",               (PyCFunction) Index_term_count,               METH_VARARGS,
                 "Return the term frequency for a term."},
 
-        {"expression_list",      (PyCFunction) Index_expression_list,      METH_VARARGS,
+        {"expression_list",          (PyCFunction) Index_expression_list,          METH_VARARGS,
                 "returns documents contain an expression."},
-        {"process_term",         (PyCFunction) Index_process_term,         METH_VARARGS,
+        {"process_term",             (PyCFunction) Index_process_term,             METH_VARARGS,
                 "Pre-processes an index term."},
-        {"term",                 (PyCFunction) Index_term,                 METH_VARARGS,
+        {"term",                     (PyCFunction) Index_term,                     METH_VARARGS,
                 "returns term given term ID."},
 
-        {"get_dictionary",       (PyCFunction) Index_get_dictionary,       METH_NOARGS,
+        {"get_dictionary",           (PyCFunction) Index_get_dictionary,           METH_NOARGS,
                 "Extracts the dictionary from the index."},
-        {"get_term_frequencies", (PyCFunction) Index_get_term_frequencies, METH_NOARGS,
+        {"get_term_frequencies",     (PyCFunction) Index_get_term_frequencies,     METH_NOARGS,
                 "Extracts the term frequencies from the index."},
         {NULL}  /* Sentinel */
 };
@@ -770,7 +793,7 @@ static int QueryEnvironment_init(QueryEnvironment *self, PyObject *args, PyObjec
     PyObject *rules_obj = NULL;
     PyObject *baseline_obj = NULL;
 
-    static char *kwlist[] = {(char*)"index", (char*)"rules", (char*)"baseline",
+    static char *kwlist[] = {(char *) "index", (char *) "rules", (char *) "baseline",
                              NULL};
 
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|O!O!", kwlist,
@@ -843,10 +866,10 @@ static PyObject *QueryEnvironment_run_query(QueryEnvironment *self, PyObject *ar
     long results_requested = 0;
     bool include_snippets = false;
 
-    static char *kwlist[] = {(char*)"query_str",
-                             (char*)"document_set",
-                             (char*)"results_requested",
-                             (char*)"include_snippets",
+    static char *kwlist[] = {(char *) "query_str",
+                             (char *) "document_set",
+                             (char *) "results_requested",
+                             (char *) "include_snippets",
                              NULL};
 
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "U|Olb", kwlist,
@@ -912,10 +935,10 @@ static PyObject *QueryEnvironment_run_query(QueryEnvironment *self, PyObject *ar
     try {
         if (document_ids.empty()) {
             query_annotation = self->query_env_->runAnnotatedQuery(
-                    query_str, (int)results_requested);
+                    query_str, (int) results_requested);
         } else {
             query_annotation = self->query_env_->runAnnotatedQuery(
-                    query_str, document_ids, (int)results_requested);
+                    query_str, document_ids, (int) results_requested);
         }
     } catch (const lemur::api::Exception &e) {
         PyErr_SetString(PyExc_IOError, e.what().c_str());
