@@ -11,7 +11,6 @@ import pyndri
 
 
 class PyndriTest(unittest.TestCase):
-
     def setUp(self):
         if hasattr(sys, 'gettotalrefcount'):
             gc.collect()
@@ -26,7 +25,6 @@ class PyndriTest(unittest.TestCase):
 
 
 class ParsingTest(PyndriTest):
-
     def test_stemming(self):
         self.assertEqual(pyndri.stem('predictions'), 'prediction')
         self.assertEqual(pyndri.stem('marketing'), 'marketing')
@@ -65,7 +63,6 @@ class ParsingTest(PyndriTest):
 
 
 class IndriTest(PyndriTest):
-
     CORPUS = """<DOC>
 <DOCNO>lorem</DOCNO>
 <TEXT>
@@ -146,6 +143,16 @@ ACT I  PROLOGUE  Two households, both alike in dignity, In fair Verona, where we
 
         # Applies Krovetz stemming.
         self.assertEqual(self.index.process_term('Greek'), 'greece')
+
+    def test_expand_query(self):
+        self.assertEqual(self.index.expand_query('consectetur adipiscing', 10, 10, ['lorem', 'hamlet']),
+                         '#weight( 0.50000000000000000000000000000000 #combine( consectetur adipiscing ) '
+                         '0.50000000000000000000000000000000 #weight(  0.04225352112676056259843448970059 "francisco"  '
+                         '0.04225352112676056259843448970059 "bernardo"  0.02112676056338028129921724485030 "i"  '
+                         '0.01976632522407170342026994092066 "at"  0.01704545454545454419292838110778 "nulla"  '
+                         '0.01704545454545454419292838110778 "in"  0.01704545454545454419292838110778 "consectetur"  '
+                         '0.01704545454545454419292838110778 "eget"  0.01408450704225352144438598855913 "to"  '
+                         '0.01408450704225352144438598855913 "and"  ) ) ')
 
     def test_simple_query(self):
         self.assertEqual(
@@ -315,6 +322,7 @@ ACT I  PROLOGUE  Two households, both alike in dignity, In fair Verona, where we
         self.index = None
 
         super(IndriTest, self).tearDown()
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -21,6 +21,9 @@
 #include <indri/QueryParserFactory.hpp>
 #include <indri/Path.hpp>
 #include "indri/SnippetBuilder.hpp"
+#include "indri/QueryExpander.hpp"
+#include "indri/RMExpander.hpp"
+#include "indri/RelevanceModel.hpp"
 
 using std::string;
 
@@ -593,6 +596,50 @@ static PyObject *Index_process_term(Index *self, PyObject *args) {
                             "strict");
 }
 
+static PyObject *Index_expand_query(Index *self, PyObject *args) {
+    char *query_object;
+    int fbDocs;
+    int fbTerms;
+
+    PyObject *obj;
+
+    if (!PyArg_ParseTuple(args, "siiO", &query_object, &fbDocs, &fbTerms, &obj)) {
+        return NULL;
+    }
+
+    self->parameters_->set("fbDocs", fbDocs);
+    self->parameters_->set("fbTerms", fbTerms);
+    self->parameters_->set("fbOrigWeight", 0.5);
+    self->parameters_->set("fbMu", 0);
+
+    PyObject *iter = PyObject_GetIter(obj);
+    if (!iter)
+        PyErr_SetString(PyExc_RuntimeError, "error not iterator");
+
+    std::vector<indri::api::ScoredExtentResult> fbDocuments;
+    while (true) {
+        PyObject *next = PyIter_Next(iter);
+        if (!next)
+            break;
+        string docname = PyUnicode_AsUTF8(next);
+        lemur::api::DOCID_T docid = self->collection_->retrieveIDByMetadatum("docno", docname).front();
+        indri::api::ScoredExtentResult r(0.0, docid);
+        fbDocuments.push_back(r);
+    }
+
+    indri::query::QueryExpander* _expander;
+
+    std::string expandedQuery;
+    string originalQuery(query_object);
+    _expander = new indri::query::RMExpander( self->query_env_, *self->parameters_ );
+    expandedQuery = _expander->expand( originalQuery, fbDocuments );
+
+    return PyUnicode_Decode(expandedQuery.c_str(),
+                            expandedQuery.size(),
+                            ENCODING,
+                            "strict");
+}
+
 static PyObject *Index_document_length_doc_name(Index *self, PyObject *args) {
     char* ext_document_id;
 
@@ -754,6 +801,9 @@ static PyMethodDef Index_methods[] = {
                 "Extracts the dictionary from the index."},
         {"get_term_frequencies",     (PyCFunction) Index_get_term_frequencies,     METH_NOARGS,
                 "Extracts the term frequencies from the index."},
+        {"expand_query",             (PyCFunction) Index_expand_query,             METH_VARARGS,
+                "Expand a query."},
+
         {NULL}  /* Sentinel */
 };
 
