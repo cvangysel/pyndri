@@ -505,13 +505,8 @@ static PyObject *Index_maximum_document(Index *self) {
     return PyLong_FromLong(self->index_->documentMaximum());
 }
 
-static PyObject *Local_total_count(Index *self) {
-    indri::collection::Repository r;
-    r.open( self->repository_path_ );
-    indri::server::LocalQueryServer local(r);
-    INT64 docCount = local.documentCount();
-    r.close();
-    return PyLong_FromLong(docCount);
+static PyObject *QuEnv_total_count(Index *self) {
+    return PyLong_FromLong(self->query_env_->documentCount());
 }
 
 static PyObject *Index_document_count(Index *self, PyObject *args) {
@@ -817,8 +812,8 @@ static PyMethodDef Index_methods[] = {
         {"maximum_document",         (PyCFunction) Index_maximum_document,         METH_NOARGS,
                 "Returns the upper bound document identifier (exclusive)."},
 
-        {"total_count",              (PyCFunction) Local_total_count,           METH_NOARGS,
-                "Returns the number of documents in the index."},
+        {"total_count",              (PyCFunction) QuEnv_total_count,              METH_NOARGS,
+                "Returns the number of documents in the repository."},
         {"document_length",          (PyCFunction) Index_document_length,          METH_VARARGS,
                 "Returns the length of a document."},
         {"document_length_doc_name", (PyCFunction) Index_document_length_doc_name, METH_VARARGS,
