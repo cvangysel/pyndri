@@ -316,6 +316,11 @@ ACT I  PROLOGUE  Two households, both alike in dignity, In fair Verona, where we
             self.index.tokenize('strategies predictions'),
             ['strategy', 'prediction'])
 
+    def test_delete_documents(self):
+        res = self.index.delete_documents(['hamlet', 'lorem'])
+        print(res, file=sys.stderr)
+        self.assertGreater(os.stat(self.test_dir).st_size, 0)
+
     def tearDown(self):
         shutil.rmtree(self.test_dir)
         del self.index

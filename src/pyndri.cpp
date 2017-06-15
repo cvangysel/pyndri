@@ -98,6 +98,39 @@ static PyObject *Index_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
     return (PyObject *) self;
 }
 
+
+static void load_index(Index * self, const char * repository_path) {
+    std::string index_path = "index";
+
+    indri::api::Parameters container = (*self->parameters_)["indexes"];
+
+    if (container.exists("index")) {
+        indri::api::Parameters indexes = container["index"];
+
+        if (indexes.size() != 1) {
+            PyErr_SetString(PyExc_IOError, "Indri repository contain more than one index.");
+
+            exit(EXIT_FAILURE);
+        }
+
+        index_path = indri::file::Path::combine(
+                index_path, (std::string) indexes[static_cast<size_t>(0)]);
+    } else {
+        PyErr_SetString(PyExc_IOError, "Indri repository does not contain an index.");
+
+        exit(EXIT_FAILURE);
+    }
+
+    try {
+        self->index_->open(repository_path, index_path);
+    } catch (const lemur::api::Exception &e) {
+        PyErr_SetString(PyExc_IOError, e.what().c_str());
+
+        exit(EXIT_FAILURE);
+    }
+}
+
+
 static int Index_init(Index *self, PyObject *args, PyObject *kwds) {
     const char *repository_path = NULL;
 
@@ -120,7 +153,6 @@ static int Index_init(Index *self, PyObject *args, PyObject *kwds) {
                 indri::file::Path::combine(repository_path, "manifest"));
     } catch (const lemur::api::Exception &e) {
         PyErr_SetString(PyExc_IOError, e.what().c_str());
-
         return -1;
     }
 
@@ -135,35 +167,7 @@ static int Index_init(Index *self, PyObject *args, PyObject *kwds) {
         return -1;
     }
 
-    // Load index.
-    std::string index_path = "index";
-
-    indri::api::Parameters container = (*self->parameters_)["indexes"];
-
-    if (container.exists("index")) {
-        indri::api::Parameters indexes = container["index"];
-
-        if (indexes.size() != 1) {
-            PyErr_SetString(PyExc_IOError, "Indri repository contain more than one index.");
-
-            return -1;
-        }
-
-        index_path = indri::file::Path::combine(
-                index_path, (std::string) indexes[static_cast<size_t>(0)]);
-    } else {
-        PyErr_SetString(PyExc_IOError, "Indri repository does not contain an index.");
-
-        return -1;
-    }
-
-    try {
-        self->index_->open(repository_path, index_path);
-    } catch (const lemur::api::Exception &e) {
-        PyErr_SetString(PyExc_IOError, e.what().c_str());
-
-        return -1;
-    }
+    load_index(self, repository_path);
 
     // TODO(cvangysel): possibly remove query_env_ in the future.
     try {
@@ -176,6 +180,7 @@ static int Index_init(Index *self, PyObject *args, PyObject *kwds) {
 
     return 0;
 }
+
 
 static PyMemberDef Index_members[] = {
         {"path", T_STRING, offsetof(Index, repository_path_), READONLY, "path to repository"},
@@ -596,6 +601,40 @@ static PyObject *Index_process_term(Index *self, PyObject *args) {
                             "strict");
 }
 
+static PyObject *Index_delete_documents(Index *self, PyObject *args) {
+    PyObject *obj;
+
+    if (!PyArg_ParseTuple(args, "O", &obj)) {
+        return NULL;
+    }
+
+    PyObject *iter = PyObject_GetIter(obj);
+    if (!iter)
+        PyErr_SetString(PyExc_RuntimeError, "error not iterator");
+
+    std::vector<lemur::api::DOCID_T> documents_to_remove;
+    while (true) {
+        PyObject *next = PyIter_Next(iter);
+        if (!next)
+            break;
+        string docname = PyUnicode_AsUTF8(next);
+        lemur::api::DOCID_T docid = self->collection_->retrieveIDByMetadatum("docno", docname).front();
+        documents_to_remove.push_back(docid);
+    }
+
+    indri::collection::Repository r;
+    r.open( self->repository_path_ );
+    for(int i = 0; i <= documents_to_remove.size(); i++) {
+        r.deleteDocument(documents_to_remove[i]);
+    }
+    indri::server::LocalQueryServer local(r);
+    UINT64 docCount = local.documentCount();
+    r.close();
+
+    return PyLong_FromLong(docCount);
+
+}
+
 static PyObject *Index_expand_query(Index *self, PyObject *args) {
     char *query_object;
     int fbDocs;
@@ -803,6 +842,9 @@ static PyMethodDef Index_methods[] = {
                 "Extracts the term frequencies from the index."},
         {"expand_query",             (PyCFunction) Index_expand_query,             METH_VARARGS,
                 "Expand a query."},
+        {"delete_documents",         (PyCFunction) Index_delete_documents,         METH_VARARGS,
+                "Deletes documents from repo."},
+
 
         {NULL}  /* Sentinel */
 };
