@@ -509,7 +509,7 @@ static PyObject *QuEnv_total_count(Index *self) {
     return PyLong_FromLong(self->query_env_->documentCount());
 }
 
-static PyObject *Index_document_count(Index *self, PyObject *args) {
+static PyObject *QuEnv_document_count(Index *self, PyObject *args) {
 
     char *term_object;
 
@@ -520,15 +520,15 @@ static PyObject *Index_document_count(Index *self, PyObject *args) {
     return PyLong_FromLong(self->query_env_->documentCount(term_object));
 }
 
-static PyObject *Index_total_terms(Index *self) {
-    return PyLong_FromLong(self->index_->termCount());
+static PyObject *QuEnv_total_terms(Index *self) {
+    return PyLong_FromLong(self->query_env_->termCount());
 }
 
 static PyObject *Index_unique_terms(Index *self) {
     return PyLong_FromLong(self->index_->uniqueTermCount());
 }
 
-static PyObject *Index_term_count(Index *self, PyObject *args) {
+static PyObject *QuEnv_term_count(Index *self, PyObject *args) {
     char *term_object;
 
     if (!PyArg_ParseTuple(args, "s", &term_object)) {
@@ -581,7 +581,7 @@ static PyObject *Index_expression_list(Index *self, PyObject *args) {
     return PDict_results;
 }
 
-static PyObject *Index_process_term(Index *self, PyObject *args) {
+static PyObject *QuEnv_process_term(Index *self, PyObject *args) {
     char *term_object;
 
     if (!PyArg_ParseTuple(args, "s", &term_object)) {
@@ -679,7 +679,7 @@ static PyObject *Index_expand_query(Index *self, PyObject *args) {
                             "strict");
 }
 
-static PyObject *Index_document_length_doc_name(Index *self, PyObject *args) {
+static PyObject *QuEnv_document_length_doc_name(Index *self, PyObject *args) {
     char* ext_document_id;
 
     if (!PyArg_ParseTuple(args, "s", &ext_document_id)) {
@@ -696,18 +696,18 @@ static PyObject *Index_document_length_doc_name(Index *self, PyObject *args) {
 
     lemur::api::DOCID_T int_document_id = documentIDs.front();
 
-    return PyLong_FromLong(self->index_->documentLength(int_document_id));
+    return PyLong_FromLong(self->query_env_->documentLength(int_document_id));
 
 }
 
-static PyObject *Index_document_length(Index *self, PyObject *args) {
+static PyObject *QuEnv_document_length(Index *self, PyObject *args) {
     int int_document_id;
 
     if (!PyArg_ParseTuple(args, "i", &int_document_id)) {
         return NULL;
     }
 
-    return PyLong_FromLong(self->index_->documentLength(int_document_id));
+    return PyLong_FromLong(self->query_env_->documentLength(int_document_id));
 }
 
 static PyObject *Index_get_dictionary(Index *self, PyObject *) {
@@ -814,24 +814,24 @@ static PyMethodDef Index_methods[] = {
 
         {"total_count",              (PyCFunction) QuEnv_total_count,              METH_NOARGS,
                 "Returns the number of documents in the repository."},
-        {"document_length",          (PyCFunction) Index_document_length,          METH_VARARGS,
+        {"document_length",          (PyCFunction) QuEnv_document_length,          METH_VARARGS,
                 "Returns the length of a document."},
-        {"document_length_doc_name", (PyCFunction) Index_document_length_doc_name, METH_VARARGS,
+        {"document_length_doc_name", (PyCFunction) QuEnv_document_length_doc_name, METH_VARARGS,
                 "Returns the length of a document given its document name."},
 
-        {"total_terms",              (PyCFunction) Index_total_terms,              METH_NOARGS,
-                "Returns the number of total terms in the index."},
+        {"total_terms",              (PyCFunction) QuEnv_total_terms,              METH_NOARGS,
+                "Returns the number of total terms in the repository."},
         {"unique_terms",             (PyCFunction) Index_unique_terms,             METH_NOARGS,
                 "Returns the number of unique terms in the index."},
 
-        {"document_count",           (PyCFunction) Index_document_count,           METH_VARARGS,
+        {"document_count",           (PyCFunction) QuEnv_document_count,           METH_VARARGS,
                 "Returns the document frequency for a term."},
-        {"term_count",               (PyCFunction) Index_term_count,               METH_VARARGS,
+        {"term_count",               (PyCFunction) QuEnv_term_count,               METH_VARARGS,
                 "Return the term frequency for a term."},
 
         {"expression_list",          (PyCFunction) Index_expression_list,          METH_VARARGS,
                 "returns documents contain an expression."},
-        {"process_term",             (PyCFunction) Index_process_term,             METH_VARARGS,
+        {"process_term",             (PyCFunction) QuEnv_process_term,             METH_VARARGS,
                 "Pre-processes an index term."},
         {"term",                     (PyCFunction) Index_term,                     METH_VARARGS,
                 "returns term given term ID."},

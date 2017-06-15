@@ -321,6 +321,11 @@ ACT I  PROLOGUE  Two households, both alike in dignity, In fair Verona, where we
         print(res, file=sys.stderr)
         self.assertEquals(res, 3)
 
+    def test_total_terms(self):
+        res = self.index.total_terms()
+        print(res, file=sys.stderr)
+        self.assertEquals(res, 732)
+
     def test_delete_documents(self):
         res = self.index.delete_documents(['hamlet', 'lorem'])
         print(res, file=sys.stderr)
