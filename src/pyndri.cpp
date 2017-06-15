@@ -505,8 +505,13 @@ static PyObject *Index_maximum_document(Index *self) {
     return PyLong_FromLong(self->index_->documentMaximum());
 }
 
-static PyObject *Index_total_document(Index *self) {
-    return PyLong_FromLong(self->index_->documentCount());
+static PyObject *Local_total_count(Index *self) {
+    indri::collection::Repository r;
+    r.open( self->repository_path_ );
+    indri::server::LocalQueryServer local(r);
+    INT64 docCount = local.documentCount();
+    r.close();
+    return PyLong_FromLong(docCount);
 }
 
 static PyObject *Index_document_count(Index *self, PyObject *args) {
@@ -624,11 +629,11 @@ static PyObject *Index_delete_documents(Index *self, PyObject *args) {
 
     indri::collection::Repository r;
     r.open( self->repository_path_ );
-    for(int i = 0; i <= documents_to_remove.size(); i++) {
+    for(size_t i = 0; i <= documents_to_remove.size(); i++) {
         r.deleteDocument(documents_to_remove[i]);
     }
     indri::server::LocalQueryServer local(r);
-    UINT64 docCount = local.documentCount();
+    INT64 docCount = local.documentCount();
     r.close();
 
     return PyLong_FromLong(docCount);
@@ -812,7 +817,7 @@ static PyMethodDef Index_methods[] = {
         {"maximum_document",         (PyCFunction) Index_maximum_document,         METH_NOARGS,
                 "Returns the upper bound document identifier (exclusive)."},
 
-        {"total_count",              (PyCFunction) Index_total_document,           METH_NOARGS,
+        {"total_count",              (PyCFunction) Local_total_count,           METH_NOARGS,
                 "Returns the number of documents in the index."},
         {"document_length",          (PyCFunction) Index_document_length,          METH_VARARGS,
                 "Returns the length of a document."},
