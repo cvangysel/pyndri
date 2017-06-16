@@ -612,27 +612,27 @@ static PyObject *Index_delete_documents(Index *self, PyObject *args) {
     if (!iter)
         PyErr_SetString(PyExc_RuntimeError, "error not iterator");
 
+    map<string, lemur::api::DOCID_T> all_docs;
+    for (lemur::api::DOCID_T docidT = 1; docidT < self->query_env_->documentCount(); docidT++){
+        all_docs[self->collection_->retrieveMetadatum(docidT, "docno")] = docidT;
+    }
+
     std::vector<lemur::api::DOCID_T> documents_to_remove;
     while (true) {
         PyObject *next = PyIter_Next(iter);
         if (!next)
             break;
         string docname = PyUnicode_AsUTF8(next);
-        lemur::api::DOCID_T docid = self->collection_->retrieveIDByMetadatum("docno", docname).front();
-        documents_to_remove.push_back(docid);
+        if (all_docs.find(docname) != all_docs.end())
+            documents_to_remove.push_back(all_docs[docname]);
     }
 
     indri::collection::Repository r;
     r.open( self->repository_path_ );
-    for(size_t i = 0; i <= documents_to_remove.size(); i++) {
+    for(size_t i = 1; i <= documents_to_remove.size(); i++) {
         r.deleteDocument(documents_to_remove[i]);
     }
-    indri::server::LocalQueryServer local(r);
-    INT64 docCount = local.documentCount();
-    r.close();
-
-    return PyLong_FromLong(docCount);
-
+    return PyLong_FromLong(documents_to_remove.size());
 }
 
 static PyObject *Index_expand_query(Index *self, PyObject *args) {
@@ -686,6 +686,7 @@ static PyObject *QuEnv_document_length_doc_name(Index *self, PyObject *args) {
         return NULL;
     }
     std::vector<lemur::api::DOCID_T> documentIDs;
+    //TODO-saeid fix issue: if ext_document_id doesn't exit as a docno, segmentation fault will crash the process
     documentIDs = self->collection_->retrieveIDByMetadatum("docno", ext_document_id);
 
     if (documentIDs.size() < 1)

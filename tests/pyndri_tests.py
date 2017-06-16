@@ -327,9 +327,13 @@ ACT I  PROLOGUE  Two households, both alike in dignity, In fair Verona, where we
         self.assertEquals(res, 732)
 
     def test_delete_documents(self):
+        res = self.index.delete_documents(['hamletaaaa', 'lorembbbb'])
+        print(res, file=sys.stderr)
+        self.assertEquals(os.stat(os.path.join(self.test_dir, "index", "deleted")).st_size, 0)
+
         res = self.index.delete_documents(['hamlet', 'lorem'])
         print(res, file=sys.stderr)
-        self.assertGreater(os.stat(self.test_dir).st_size, 0)
+        self.assertGreater(os.stat(os.path.join(self.test_dir, "index", "deleted")).st_size, 0)
 
     def tearDown(self):
         shutil.rmtree(self.test_dir)
