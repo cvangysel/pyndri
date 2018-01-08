@@ -850,7 +850,7 @@ static PyObject* pyndri_porter_stem(PyObject* self, PyObject* args) {
     std::string term_str(PyBytes_AsString(term_bytes)); // Takes a copy.
     Py_DECREF(term_bytes);
 
-    char* const stemmed_term = new char[term_str.length()];
+    char* const stemmed_term = new char[term_str.length() + 1];
     term_str.copy(stemmed_term, term_str.length());
     stemmed_term[term_str.length()] = '\0';
 
