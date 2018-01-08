@@ -27,10 +27,15 @@ class PyndriTest(unittest.TestCase):
 
 class ParsingTest(PyndriTest):
 
-    def test_stemming(self):
-        self.assertEqual(pyndri.stem('predictions'), 'prediction')
-        self.assertEqual(pyndri.stem('marketing'), 'marketing')
-        self.assertEqual(pyndri.stem('strategies'), 'strategy')
+    def test_krovetz_stemming(self):
+        self.assertEqual(pyndri.krovetz_stem('predictions'), 'prediction')
+        self.assertEqual(pyndri.krovetz_stem('marketing'), 'marketing')
+        self.assertEqual(pyndri.krovetz_stem('strategies'), 'strategy')
+
+    def test_porter_stemming(self):
+        self.assertEqual(pyndri.porter_stem('predictions'), 'predict')
+        self.assertEqual(pyndri.porter_stem('marketing'), 'market')
+        self.assertEqual(pyndri.porter_stem('strategies'), 'strategi')
 
     def test_escape(self):
         self.assertEqual(pyndri.escape('hello (world)'),

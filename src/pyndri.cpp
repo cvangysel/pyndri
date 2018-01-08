@@ -21,7 +21,8 @@
 #include <indri/QueryParserFactory.hpp>
 #include <indri/QuerySpec.hpp>
 #include <indri/Path.hpp>
-#include "indri/SnippetBuilder.hpp"
+#include <indri/Porter_Stemmer.hpp>
+#include <indri/SnippetBuilder.hpp>
 
 using std::string;
 
@@ -796,7 +797,7 @@ static PyMethodDef QueryEnvironment_methods[] = {
 
 // Module methods.
 
-static PyObject* pyndri_stem(PyObject* self, PyObject* args) {
+static PyObject* pyndri_krovetz_stem(PyObject* self, PyObject* args) {
     PyObject* term;
 
     if (!PyArg_ParseTuple(args, "U", &term)) {
@@ -822,6 +823,46 @@ static PyObject* pyndri_stem(PyObject* self, PyObject* args) {
                                         stemmed_term.size(),
                                         ENCODING,
                                         "strict");
+
+    // Canonical; to indicate that result can be NULL.
+    if (result == NULL) {
+        return NULL;
+    }
+
+    return result;
+}
+
+static PyObject* pyndri_porter_stem(PyObject* self, PyObject* args) {
+    PyObject* term;
+
+    if (!PyArg_ParseTuple(args, "U", &term)) {
+        return NULL;
+    }
+
+    CHECK(PyUnicode_Check(term));
+
+    PyObject* term_bytes = PyUnicode_AsEncodedString(term, ENCODING, "strict");
+
+    if (term_bytes == NULL) {
+        return NULL;
+    }
+
+    std::string term_str(PyBytes_AsString(term_bytes)); // Takes a copy.
+    Py_DECREF(term_bytes);
+
+    char* const stemmed_term = new char[term_str.length()];
+    term_str.copy(stemmed_term, term_str.length());
+    stemmed_term[term_str.length()] = '\0';
+
+    static indri::parse::Porter_Stemmer stemmer;
+    const int new_end = stemmer.porter_stem(stemmed_term, 0, term_str.length() - 1);
+
+    PyObject* result = PyUnicode_Decode(stemmed_term,
+                                        new_end + 1,
+                                        ENCODING,
+                                        "strict");
+
+    delete [] stemmed_term;
 
     // Canonical; to indicate that result can be NULL.
     if (result == NULL) {
@@ -895,8 +936,10 @@ static PyObject* pyndri_tokenize(PyObject* self, PyObject* args) {
 }
 
 static PyMethodDef PyndriMethods[] = {
-    {"stem", (PyCFunction) pyndri_stem, METH_VARARGS,
+    {"krovetz_stem", (PyCFunction) pyndri_krovetz_stem, METH_VARARGS,
      "Return the Krovetz stemmed version of a term."},
+    {"porter_stem", (PyCFunction) pyndri_porter_stem, METH_VARARGS,
+     "Return the Porter stemmed version of a term."},
     {"tokenize", (PyCFunction) pyndri_tokenize, METH_VARARGS,
      "Tokenize an input string."},
     {NULL, NULL, 0, NULL}

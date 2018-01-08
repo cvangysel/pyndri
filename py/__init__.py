@@ -1,7 +1,7 @@
 from pyndri.dictionary import Dictionary, extract_dictionary
 
 from pyndri_ext import Index as __IndexBase
-from pyndri_ext import QueryEnvironment, stem, tokenize
+from pyndri_ext import QueryEnvironment, krovetz_stem, porter_stem, tokenize
 
 import os
 
@@ -10,7 +10,8 @@ __all__ = [
     'Dictionary',
     'QueryEnvironment',
     'extract_dictionary',
-    'stem',
+    'krovetz_stem',
+    'porter_stem',
     'tokenize',
     'escape',
 ]
@@ -37,6 +38,9 @@ def escape(input):
         ord('<'): ' ',
         ord('>'): ' ',
         ord('%'): ' ',
+        ord('@'): ' ',
+        ord('\\'): ' ',
+        ord('*'): ' ',
     })
 
 
