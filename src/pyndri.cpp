@@ -22,6 +22,7 @@
 #include <indri/QuerySpec.hpp>
 #include <indri/Path.hpp>
 #include <indri/Porter_Stemmer.hpp>
+#include <indri/RMExpander.hpp>
 #include <indri/SnippetBuilder.hpp>
 
 using std::string;
@@ -49,6 +50,7 @@ int PyDict_SetItemAndSteal(PyObject* p, PyObject* key, PyObject* val) {
 
 static PyTypeObject IndexType;
 static PyTypeObject QueryEnvironmentType;
+static PyTypeObject QueryExpanderType;
 
 // Index
 
@@ -175,11 +177,6 @@ static int Index_init(Index* self, PyObject* args, PyObject* kwds) {
 
     return 0;
 }
-
-static PyMemberDef Index_members[] = {
-    {"path", T_STRING, offsetof(Index, repository_path_), READONLY, "path to repository"},
-    {NULL}  /* Sentinel */
-};
 
 static PyObject* Index_get_document_ids(Index* self, PyObject* args) {
     PyObject* external_doc_ids = NULL;
@@ -547,6 +544,11 @@ static PyMethodDef Index_methods[] = {
     {NULL}  /* Sentinel */
 };
 
+static PyMemberDef Index_members[] = {
+    {"path", T_STRING, offsetof(Index, repository_path_), READONLY, "path to repository"},
+    {NULL}  /* Sentinel */
+};
+
 // QueryEnvironment
 
 typedef struct {
@@ -784,6 +786,10 @@ static PyObject* QueryEnvironment_run_query(QueryEnvironment* self, PyObject* ar
     return results;
 }
 
+static PyObject* QueryEnvironment_internal_obj(QueryEnvironment* self, void*) {
+    return PyCapsule_New(self->query_env_, "indri::api::QueryEnvironment", NULL);
+}
+
 static PyMemberDef QueryEnvironment_members[] = {
     {NULL}  /* Sentinel */
 };
@@ -791,6 +797,156 @@ static PyMemberDef QueryEnvironment_members[] = {
 static PyMethodDef QueryEnvironment_methods[] = {
     {"query", (PyCFunction) QueryEnvironment_run_query, METH_VARARGS | METH_KEYWORDS,
      "Queries an Indri index."},
+
+    {NULL}  /* Sentinel */
+};
+
+static PyGetSetDef QueryEnvironment_getset[] = {
+    {"_internal_obj", (getter) QueryEnvironment_internal_obj, NULL, NULL, NULL},
+
+    {NULL}  /* Sentinel */
+};
+
+// QueryExpander
+
+typedef struct {
+    PyObject_HEAD
+
+    PyObject* query_env_obj_;
+
+    indri::api::QueryEnvironment* query_env_;  // Owned by query_env_obj_.
+    indri::query::RMExpander* expander_;
+
+    long fb_docs_;
+} QueryExpander;
+
+static void QueryExpander_dealloc(QueryExpander* self) {
+    Py_DECREF(self->query_env_obj_);
+    self->query_env_obj_ = NULL;
+
+    if (self->expander_ != NULL) {
+        delete self->expander_;
+        self->expander_ = NULL;
+    }
+}
+
+static PyObject* QueryExpander_new(PyTypeObject* type, PyObject* args, PyObject* kwds) {
+    QueryExpander* self;
+
+    self = (QueryExpander*) type->tp_alloc(type, 0);
+    if (self != NULL) {
+        self->query_env_obj_ = NULL;
+
+        self->query_env_ = NULL;
+        self->expander_ = NULL;
+    }
+
+    return (PyObject*) self;
+}
+
+static int QueryExpander_init(QueryExpander* self, PyObject* args, PyObject* kwds) {
+    PyObject* query_env_obj = NULL;
+    self->fb_docs_ = 10;
+    long fb_terms = 10;
+
+    static char* kwlist[] = {"query_env", "fb_docs", "fb_terms", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|ll", kwlist,
+                                     &QueryEnvironmentType, &query_env_obj,
+                                     &self->fb_docs_,
+                                     &fb_terms)) {
+        return -1;
+    }
+
+    if (self->fb_docs_ <= 0) {
+        PyErr_SetString(PyExc_RuntimeError, "fb_docs should be positive.");
+        return NULL;
+    }
+
+    if (fb_terms <= 0) {
+        PyErr_SetString(PyExc_RuntimeError, "fb_terms should be positive.");
+        return NULL;
+    }
+
+    indri::api::Parameters rm_parameters;
+    rm_parameters.set("fbDocs", self->fb_docs_);
+    rm_parameters.set("fbTerms", fb_terms);
+
+    self->query_env_obj_ = query_env_obj;
+    Py_INCREF(self->query_env_obj_);
+
+    // We use a PyCapsule to retrieve the internal pointer and immediately destroy the PyCapsule afterwards.
+    // However, the pointer is owned by the QueryEnvironment
+
+    // Retrieve internal pointer.
+    PyObject* internal_query_env_obj_capsule = PyObject_GetAttrString(
+        self->query_env_obj_, "_internal_obj");
+
+    self->query_env_ = (indri::api::QueryEnvironment*) PyCapsule_GetPointer(
+        internal_query_env_obj_capsule, "indri::api::QueryEnvironment");
+    CHECK_NOTNULL(self->query_env_);
+
+    self->expander_ = new indri::query::RMExpander(self->query_env_, rm_parameters);
+
+    // Deallocate.
+    Py_DECREF(self->query_env_obj_);
+
+    return 0;
+}
+
+static PyObject* QueryExpander_expand(QueryExpander* self, PyObject* args, PyObject* kwds) {
+    PyObject* query_obj = NULL;
+
+    static char* kwlist[] = {"query_str",
+                             NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "U", kwlist, &query_obj)) {
+        return NULL;
+    }
+
+    CHECK(PyUnicode_Check(query_obj));
+
+    PyObject* query_bytes_obj = PyUnicode_AsEncodedString(query_obj, ENCODING, "strict");
+    std::string query_str = PyBytes_AsString(query_bytes_obj);
+
+    // Perform initial retrieval.
+    indri::api::QueryAnnotation* query_annotation;
+
+    try {
+        query_annotation = self->query_env_->runAnnotatedQuery(
+            query_str, self->fb_docs_);
+    } catch (const lemur::api::Exception& e) {
+        PyErr_SetString(PyExc_IOError, e.what().c_str());
+
+        Py_DECREF(query_bytes_obj);
+
+        return NULL;
+    }
+
+    std::vector<indri::api::ScoredExtentResult> query_results = query_annotation->getResults();
+
+    // Expand query.
+    const string expanded_query_str = self->expander_->expand(query_str, query_results);
+
+    // Clean up.
+    query_results.clear();
+
+    Py_DECREF(query_bytes_obj);
+    delete query_annotation;
+
+    return PyUnicode_Decode(expanded_query_str.c_str(),
+                            expanded_query_str.size(),
+                            ENCODING,
+                            "strict");
+}
+
+static PyMemberDef QueryExpander_members[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyMethodDef QueryExpander_methods[] = {
+    {"expand", (PyCFunction) QueryExpander_expand, METH_VARARGS | METH_KEYWORDS,
+     "Expands a query using RM3."},
 
     {NULL}  /* Sentinel */
 };
@@ -991,7 +1147,7 @@ PyMODINIT_FUNC PyInit_pyndri_ext(void) {
         0,                         /* tp_descr_get */
         0,                         /* tp_descr_set */
         0,                         /* tp_dictoffset */
-        (initproc) Index_init,      /* tp_init */
+        (initproc) Index_init,     /* tp_init */
         0,                         /* tp_alloc */
         Index_new,                 /* tp_new */
     };
@@ -1030,7 +1186,7 @@ PyMODINIT_FUNC PyInit_pyndri_ext(void) {
         0,                   /* tp_iternext */
         QueryEnvironment_methods,             /* tp_methods */
         QueryEnvironment_members,             /* tp_members */
-        0,                         /* tp_getset */
+        QueryEnvironment_getset,              /* tp_getset */
         0,                         /* tp_base */
         0,                         /* tp_dict */
         0,                         /* tp_descr_get */
@@ -1045,6 +1201,51 @@ PyMODINIT_FUNC PyInit_pyndri_ext(void) {
         return NULL;
     }
 
+    QueryExpanderType = {
+        PyVarObject_HEAD_INIT(NULL, 0)
+        "pyndri.QueryExpander",             /* tp_name */
+        sizeof(QueryExpander),             /* tp_basicsize */
+        0,                         /* tp_itemsize */
+        (destructor) QueryExpander_dealloc, /* tp_dealloc */
+        0,                         /* tp_print */
+        0,                         /* tp_getattr */
+        0,                         /* tp_setattr */
+        0,                         /* tp_reserved */
+        0,                         /* tp_repr */
+        0,                         /* tp_as_number */
+        0,                         /* tp_as_sequence */
+        0,                         /* tp_as_mapping */
+        0,                         /* tp_hash */
+        0,                         /* tp_call */
+        0,                         /* tp_str */
+        0,                         /* tp_getattro */
+        0,                         /* tp_setattro */
+        0,                         /* tp_as_buffer */
+        Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /* tp_flags */
+        "QueryExpander objects",           /* tp_doc */
+        0,                   /* tp_traverse */
+        0,                   /* tp_clear */
+        0,                   /* tp_richcompare */
+        0,                   /* tp_weaklistoffset */
+        0,                   /* tp_iter */
+        0,                   /* tp_iternext */
+        QueryExpander_methods,             /* tp_methods */
+        QueryExpander_members,             /* tp_members */
+        0,                         /* tp_getset */
+        0,                         /* tp_base */
+        0,                         /* tp_dict */
+        0,                         /* tp_descr_get */
+        0,                         /* tp_descr_set */
+        0,                         /* tp_dictoffset */
+        (initproc) QueryExpander_init,      /* tp_init */
+        0,                         /* tp_alloc */
+        QueryExpander_new,                 /* tp_new */
+    };
+
+    if (PyType_Ready(&QueryExpanderType) < 0) {
+        return NULL;
+    }
+
     PyObject* const module = PyModule_Create(&PyndriModule);
 
     if (module == NULL) {
@@ -1056,6 +1257,9 @@ PyMODINIT_FUNC PyInit_pyndri_ext(void) {
 
     Py_INCREF(&QueryEnvironmentType);
     PyModule_AddObject(module, "QueryEnvironment", (PyObject*) &QueryEnvironmentType);
+
+    Py_INCREF(&QueryExpanderType);
+    PyModule_AddObject(module, "QueryExpander", (PyObject*) &QueryExpanderType);
 
     return module;
 }

@@ -21,6 +21,9 @@ with pyndri.open(sys.argv[1]) as index:
         index, rules=('method:dirichlet,mu:5000',))
     print(lm_query_env.query('hello world'))
 
+    prf_query_env = pyndri.PRFQueryEnvironment(lm_query_env)
+    print(prf_query_env.query('hello world'))
+
     # Constructs a QueryEnvironment that uses the TF-IDF retrieval model.
     #
     # See "Baseline (non-LM) retrieval"

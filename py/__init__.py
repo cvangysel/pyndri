@@ -1,7 +1,8 @@
 from pyndri.dictionary import Dictionary, extract_dictionary
 
 from pyndri_ext import Index as __IndexBase
-from pyndri_ext import QueryEnvironment, krovetz_stem, porter_stem, tokenize
+from pyndri_ext import QueryEnvironment, QueryExpander, \
+    krovetz_stem, porter_stem, tokenize
 
 import os
 
@@ -9,6 +10,7 @@ __all__ = [
     'Index',
     'Dictionary',
     'QueryEnvironment',
+    'QueryExpander',
     'extract_dictionary',
     'krovetz_stem',
     'porter_stem',
@@ -115,3 +117,15 @@ class OkapiQueryEnvironment(QueryEnvironment):
         super(OkapiQueryEnvironment, self).__init__(
             index, baseline='okapi,k1:{k1:.5f},b:{b:.5f},k3:{k3:.5f}'.format(
                 k1=k1, b=b, k3=k3))
+
+
+class PRFQueryEnvironment(object):
+
+    def __init__(self, query_env, fb_docs=10, fb_terms=10):
+        self.query_env = query_env
+        self.expander = QueryExpander(
+            query_env, fb_docs=fb_docs, fb_terms=fb_terms)
+
+    def query(self, query_str, *args, **kwargs):
+        expanded_query_str = self.expander.expand(query_str)
+        return self.query_env.query(expanded_query_str, *args, **kwargs)

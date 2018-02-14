@@ -299,6 +299,41 @@ ACT I  PROLOGUE  Two households, both alike in dignity, In fair Verona, where we
             self.index.tokenize('strategies predictions'),
             ['strategy', 'prediction'])
 
+    def test_query_expander(self):
+        query_env = pyndri.QueryEnvironment(
+            self.index,
+            rules=('method:linear,collectionLambda:0.4,documentLambda:0.2',))
+
+        query_expander = pyndri.QueryExpander(query_env)
+
+        self.assertEqual(
+            query_expander.expand('consectetur adipiscing'),
+            '#weight( 0.50000000000000000000000000000000 '
+            '#combine( consectetur adipiscing ) '
+            '0.50000000000000000000000000000000 '
+            '#weight(  0.03409090909090908838585676221555 "in"  '
+            '0.03409090909090908838585676221555 '
+            '"eget"  0.03409090909090908838585676221555 "consectetur"  '
+            '0.03409090909090908838585676221555 '
+            '"nulla"  0.02272727272727272790353580944611 "amet"  '
+            '0.02272727272727272790353580944611 '
+            '"fringilla"  0.02272727272727272790353580944611 "porta"  '
+            '0.02272727272727272790353580944611 '
+            '"tort"  0.02272727272727272790353580944611 "lorem"  '
+            '0.02272727272727272790353580944611 '
+            '"arcu"  ) ) ')
+
+    def test_prf_query_environment(self):
+        initial_query_env = pyndri.QueryEnvironment(
+            self.index,
+            rules=('method:linear,collectionLambda:0.4,documentLambda:0.2',))
+
+        prf_query_env = pyndri.PRFQueryEnvironment(initial_query_env)
+
+        results = prf_query_env.query('consectetur adipiscing')
+
+        self.assertEqual(len(results), 2)
+
     def tearDown(self):
         shutil.rmtree(self.test_dir)
         del self.index
