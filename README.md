@@ -90,7 +90,7 @@ The following example runs QLM with Dirichlet smoothing (with mu equal to the av
 	> trec_eval commoncore2017.qrel test.run-commoncore2017_queries.txt | grep -E "^map\s+"
 	map                   	all	0.2499
 
-API Examples
+API examples
 ------------
 
 How to iterate over all documents in a repository:
