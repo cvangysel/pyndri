@@ -58,7 +58,7 @@ Finally, install pyndri:
 
 Toolkit examples
 ----------------
-Since v0.3, pyndri comes with a few tools to extract index statistics and to generate rankings using commong retrieval models.
+Since v0.3, pyndri comes with a few tools to extract index statistics and to generate rankings using common retrieval models.
 
 ### PyndriStatistics
 
