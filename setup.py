@@ -13,13 +13,14 @@ pyndri_ext = Extension(
     undef_macros=['NDEBUG'])
 
 setup(name='pyndri',
-      version='0.2',
+      version='0.3-dev',
       description='pyndri is a Python interface to the Indri search engine',
       author='Christophe Van Gysel',
       author_email='cvangysel@uva.nl',
       ext_modules=[pyndri_ext],
       packages=['pyndri'],
       package_dir={'pyndri': 'py'},
+      scripts=['bin/PyndriQuery', 'bin/PyndriStatistics'],
       python_requires='>=3',
       url='https://github.com/cvangysel/pyndri',
       download_url='https://github.com/cvangysel/pyndri/tarball/0.2',

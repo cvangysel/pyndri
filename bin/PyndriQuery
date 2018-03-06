@@ -1,0 +1,158 @@
+#!/usr/bin/env python
+
+import sys
+
+import argparse
+import logging
+import os
+import pyndri
+import pyndri.utils
+
+
+JELINEK_MERCER, DIRICHLET = range(1000, 1002)
+
+SMOOTHING_METHODS = {
+    'jm': JELINEK_MERCER,
+    'dirichlet': DIRICHLET,
+}
+
+
+def build_smoothing_rule(smoothing_method, smoothing_param):
+    if smoothing_method == JELINEK_MERCER:
+        assert smoothing_param > 0.0 and smoothing_param <= 1.0
+
+        return (
+            'method:linear,collectionLambda:{:.2f},'
+            'documentLambda:{:.2f}'.format(
+                smoothing_param, 1.0 - smoothing_param))
+    elif smoothing_method == DIRICHLET:
+        assert smoothing_param >= 0
+
+        return 'method:dirichlet,mu:{}'.format(int(smoothing_param))
+    else:
+        return None
+
+
+def main():
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('--loglevel', type=str, default='INFO')
+
+    parser.add_argument('--queries', nargs='+',
+                        type=pyndri.utils.existing_file_path)
+
+    parser.add_argument('--index',
+                        type=pyndri.utils.existing_directory_path,
+                        required=True)
+
+    parser.add_argument('--strict', action='store_true', default=False)
+
+    parser.add_argument('--top_k',
+                        type=pyndri.utils.positive_int,
+                        default=1000)
+
+    parser.add_argument('--smoothing_method',
+                        choices=SMOOTHING_METHODS,
+                        default='dirichlet')
+    parser.add_argument('--smoothing_param',
+                        type=str,
+                        default='auto')
+
+    parser.add_argument('--prf', action='store_true', default=False)
+
+    parser.add_argument('--fb_docs',
+                        type=pyndri.utils.positive_int,
+                        default=10)
+    parser.add_argument('--fb_terms',
+                        type=pyndri.utils.positive_int,
+                        default=10)
+
+    parser.add_argument('--num_queries',
+                        type=pyndri.utils.positive_int,
+                        default=None)
+
+    parser.add_argument('run_out', type=pyndri.utils.nonexisting_file_path)
+
+    args = parser.parse_args()
+
+    try:
+        pyndri.utils.configure_logging(args)
+    except IOError:
+        return -1
+
+    args.smoothing_method = SMOOTHING_METHODS[args.smoothing_method]
+
+    with pyndri.open(args.index) as index:
+        if args.smoothing_param == 'auto':
+            if args.smoothing_method == JELINEK_MERCER:
+                args.smoothing_param = 0.5
+            elif args.smoothing_method == DIRICHLET:
+                avg_document_length = sum(
+                    int(index.document_length(int_doc_id))
+                    for int_doc_id in range(index.document_base(),
+                                            index.maximum_document())) / \
+                    len(index)
+
+                args.smoothing_param = avg_document_length
+            else:
+                raise NotImplementedError()
+
+            logging.info('Configured smoothing parameter to %.2f.',
+                         args.smoothing_param)
+        else:
+            args.smoothing_param = float(args.smoothing_param)
+
+        query_env = pyndri.QueryEnvironment(
+            index, rules=(
+                build_smoothing_rule(args.smoothing_method,
+                                     args.smoothing_param),))
+
+        if args.prf:
+            query_env = pyndri.PRFQueryEnvironment(
+                query_env, fb_docs=args.fb_docs, fb_terms=args.fb_terms)
+
+        logging.info('Loading dictionary.')
+        dictionary = pyndri.extract_dictionary(index)
+
+        for topic_path in args.queries:
+            run_out_path = '{}-{}'.format(
+                args.run_out, os.path.basename(topic_path))
+
+            if os.path.exists(run_out_path):
+                logging.warning('Run for queries %s already exists (%s); '
+                                'skipping.',
+                                topic_path, run_out_path)
+
+                continue
+
+            queries = list(pyndri.utils.parse_queries(
+                index, dictionary, topic_path,
+                strict=args.strict,
+                num_queries=args.num_queries))
+
+            run = pyndri.utils.TRECRunWriter(
+                'indri', rank_cutoff=(
+                    args.top_k if isinstance(args.top_k, int)
+                    else sys.maxsize))
+
+            for topic_id, topic_token_ids in queries:
+                query_text = ' '.join(
+                    dictionary[token_id]
+                    for token_id in topic_token_ids
+                    if token_id is not None)
+
+                results = query_env.query(
+                    query_text, results_requested=args.top_k)
+
+                topic_scores_and_documents = [
+                    (score, index.ext_document_id(int_document_id))
+                    for int_document_id, score in results]
+
+                run.add_ranking(topic_id, topic_scores_and_documents)
+
+            run.close_and_write(run_out_path, overwrite=False)
+
+            logging.info('Run outputted to %s.', run_out_path)
+
+if __name__ == '__main__':
+    sys.exit(main())

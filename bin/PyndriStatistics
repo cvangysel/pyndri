@@ -1,0 +1,67 @@
+#!/usr/bin/env python
+
+import argparse
+import logging
+import sys
+import numpy as np
+import pyndri
+import pyndri.utils
+import scipy.stats
+
+
+def main():
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('--loglevel', type=str, default='INFO')
+
+    parser.add_argument('--index',
+                        type=pyndri.utils.existing_directory_path,
+                        required=True)
+
+    args = parser.parse_args()
+
+    try:
+        pyndri.utils.configure_logging(args)
+    except IOError:
+        return -1
+
+    with pyndri.open(args.index) as index:
+        num_documents = 0
+        mean = 0.0
+        M2 = 0.0
+
+        min_ = np.inf
+        max_ = -np.inf
+
+        lengths = []
+
+        for document_id in range(index.document_base(),
+                                 index.maximum_document()):
+            x = float(index.document_length(document_id))
+            lengths.append(x)
+
+            num_documents += 1
+            delta = x - mean
+            mean += delta / num_documents
+            M2 += delta * (x - mean)
+
+            min_ = min(min_, x)
+            max_ = max(max_, x)
+
+        std = np.sqrt(M2 / (num_documents - 1))
+
+        mode = scipy.stats.mstats.mode(lengths)
+        median = np.median(lengths)
+
+        logging.info('NUM=%s', num_documents)
+        logging.info('LENGTH_MEDIAN=%s', median)
+        logging.info('LENGTH_MODE=%s', mode.mode[0])
+        logging.info('LENGTH_MEAN=%s', mean)
+        logging.info('LENGTH_MIN=%s', min_)
+        logging.info('LENGTH_MAX=%s', max_)
+        logging.info('LENGTH_STD=%s', std)
+        logging.info('TOTAL_TERMS=%s', index.total_terms())
+        logging.info('UNIQUE_TERMS=%s', index.unique_terms())
+
+if __name__ == '__main__':
+    sys.exit(main())
