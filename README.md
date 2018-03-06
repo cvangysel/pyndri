@@ -8,8 +8,6 @@ Requirements
 
 During development, we use Python 3.5. Some of the [examples](examples) require numpy.
 
-**NOTE**: Python2 support has ended; if you want to continue using it, please check out the  `python2` tag.
-
 Installation
 ------------
 
@@ -58,8 +56,42 @@ Finally, install pyndri:
 
     sudo pip install pyndri
 
-Examples
---------
+Toolkit examples
+----------------
+Since v0.3, pyndri comes with a few tools to extract index statistics and to generate rankings using commong retrieval models.
+
+### PyndriStatistics
+
+The following example shows statistics about the New York Times collection, as used in the TREC Common Core 2017 track.
+
+	> PyndriStatistics --index /path/to/nyt-index
+	[INFO]  Arguments: Namespace(index='/path/to/nyt-index', loglevel='INFO')
+	[INFO]  NUM=1855658
+	[INFO]  LENGTH_MEDIAN=414.0
+	[INFO]  LENGTH_MODE=109.0
+	[INFO]  LENGTH_MEAN=572.1752801432273
+	[INFO]  LENGTH_MIN=0.0
+	[INFO]  LENGTH_MAX=36814.0
+	[INFO]  LENGTH_STD=605.8240048
+	[INFO]  TOTAL_TERMS=1061761636
+	[INFO]  UNIQUE_TERMS=1351413
+
+### PyndriQuery
+
+The following example runs QLM with Dirichlet smoothing (with mu equal to the average document length) and pseudo-relevance feedback on the TREC Common Core 2017 test collection.
+
+	> PyndriQuery \
+		--loglevel warning \
+		--queries commoncore2017_queries.txt \
+		--index /path/to/nyt-index \
+		--smoothing_method dirichlet --smoothing_param auto --prf \
+		test.run
+
+	> trec_eval commoncore2017.qrel test.run-commoncore2017_queries.txt | grep -E "^map\s+"
+	map                   	all	0.2499
+
+API Examples
+------------
 
 How to iterate over all documents in a repository:
 
