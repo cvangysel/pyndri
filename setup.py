@@ -13,7 +13,7 @@ pyndri_ext = Extension(
     undef_macros=['NDEBUG'])
 
 setup(name='pyndri',
-      version='0.3-dev',
+      version='0.3',
       description='pyndri is a Python interface to the Indri search engine',
       author='Christophe Van Gysel',
       author_email='cvangysel@uva.nl',
@@ -23,7 +23,7 @@ setup(name='pyndri',
       scripts=['bin/PyndriQuery', 'bin/PyndriStatistics'],
       python_requires='>=3',
       url='https://github.com/cvangysel/pyndri',
-      download_url='https://github.com/cvangysel/pyndri/tarball/0.2',
+      download_url='https://github.com/cvangysel/pyndri/tarball/0.3',
       keywords=['indri', 'language models', 'retrieval', 'indexing'],
       classifiers=[
           'Development Status :: 3 - Alpha',
