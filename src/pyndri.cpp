@@ -869,8 +869,8 @@ static int QueryExpander_init(QueryExpander* self, PyObject* args, PyObject* kwd
     }
 
     indri::api::Parameters rm_parameters;
-    rm_parameters.set("fbDocs", self->fb_docs_);
-    rm_parameters.set("fbTerms", fb_terms);
+    rm_parameters.set("fbDocs", static_cast<int>(self->fb_docs_));
+    rm_parameters.set("fbTerms", static_cast<int>(fb_terms));
 
     self->query_env_obj_ = query_env_obj;
     Py_INCREF(self->query_env_obj_);
